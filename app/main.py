@@ -132,3 +132,63 @@ def _cart_json(priced):
 @app.post("/api/cart/price")
 def cart_price(body: CartRequest, retailer: Retailer = Depends(auth.current_retailer), db: Session = Depends(get_db)):
     return _cart_json(_price(db, retailer, body.lines))
+
+
+# ---------- orders ----------
+from .models import Order, OrderLine  # noqa: E402
+from .pricing import check_credit  # noqa: E402
+
+
+def _order_json(o: Order):
+    return {
+        "id": o.id, "status": o.status, "source": o.source, "total_paise": o.total_paise,
+        "credit_hold_reason": o.credit_hold_reason, "created_at": o.created_at.isoformat(),
+        "lines": [{"sku_code": l.sku_code, "name": l.sku.name if l.sku else "", "cases": l.cases,
+                   "free_cases": l.free_cases, "discount_paise": l.discount_paise,
+                   "net_paise": l.net_paise} for l in o.lines],
+    }
+
+
+def create_order(db: Session, retailer: Retailer, items: list[CartItem], source: str = "app",
+                 raw_text: str = "", status: str | None = None) -> Order:
+    """Price on the server (never trust client prices), reserve nothing, apply the credit rule."""
+    priced = _price(db, retailer, items)
+    if not priced.placeable:
+        raise HTTPException(422, {"message": "Some items cannot be ordered.", "cart": _cart_json(priced)})
+    hold = check_credit(retailer.credit_limit_paise, retailer.outstanding_paise, priced.total_paise)
+    o = Order(retailer_id=retailer.id, source=source, raw_text=raw_text, total_paise=priced.total_paise,
+              status=status or ("on_hold" if hold else "placed"),
+              credit_hold_reason=hold or "" if (status or "") != "draft_ai" else "")
+    for l in priced.lines:
+        o.lines.append(OrderLine(sku_code=l.sku_code, cases=l.cases, free_cases=l.free_cases,
+                                 gross_paise=l.gross_paise, discount_paise=l.discount_paise,
+                                 net_paise=l.net_paise))
+    db.add(o)
+    db.commit()
+    return o
+
+
+@app.post("/api/orders", status_code=201)
+def place_order(body: CartRequest, retailer: Retailer = Depends(auth.current_retailer),
+                db: Session = Depends(get_db)):
+    if not body.lines:
+        raise HTTPException(422, "Your cart is empty.")
+    return _order_json(create_order(db, retailer, body.lines))
+
+
+@app.get("/api/orders")
+def my_orders(retailer: Retailer = Depends(auth.current_retailer), db: Session = Depends(get_db)):
+    rows = db.scalars(select(Order).where(Order.retailer_id == retailer.id, Order.status != "draft_ai")
+                      .order_by(Order.created_at.desc()).limit(50))
+    return [_order_json(o) for o in rows]
+
+
+@app.get("/api/orders/{order_id}/repeat")
+def repeat_order(order_id: int, retailer: Retailer = Depends(auth.current_retailer),
+                 db: Session = Depends(get_db)):
+    """Re-price an old order at today's prices/stock. Returns the cart; the retailer still confirms."""
+    o = db.get(Order, order_id)
+    if not o or o.retailer_id != retailer.id:  # same answer for missing and someone else's
+        raise HTTPException(404, "Order not found.")
+    return _cart_json(_price(db, retailer, [CartItem(sku_code=l.sku_code, cases=l.cases)
+                                            for l in o.lines if l.sku_code and l.cases > 0]))
