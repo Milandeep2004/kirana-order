@@ -192,3 +192,115 @@ def repeat_order(order_id: int, retailer: Retailer = Depends(auth.current_retail
         raise HTTPException(404, "Order not found.")
     return _cart_json(_price(db, retailer, [CartItem(sku_code=l.sku_code, cases=l.cases)
                                             for l in o.lines if l.sku_code and l.cases > 0]))
+
+
+# ---------- AI capture (text) ----------
+from . import capture as cap  # noqa: E402
+from .config import ANTHROPIC_API_KEY, LLM_MODEL  # noqa: E402
+from .models import Alias  # noqa: E402
+
+_llm = cap.make_anthropic_picker(ANTHROPIC_API_KEY, LLM_MODEL) if ANTHROPIC_API_KEY else None
+
+
+class CaptureRequest(BaseModel):
+    text: str = Field(min_length=3, max_length=2000)
+
+
+class ConfirmLine(BaseModel):
+    line_id: int
+    sku_code: str = Field(max_length=24)
+    qty: int = Field(ge=1, le=10000)
+    unit: str = Field(pattern="^(case|piece)$")  # the retailer must state the unit; we never guess
+
+
+class ConfirmRequest(BaseModel):
+    lines: list[ConfirmLine] = Field(min_length=1, max_length=100)
+
+
+def _draft_json(o: Order, db: Session):
+    names = {s.code: s.name for s in db.scalars(select(Sku))}
+    return {"id": o.id, "status": o.status, "raw_text": o.raw_text, "lines": [{
+        "line_id": l.id, "original_text": l.original_text, "sku_code": l.sku_code,
+        "sku_name": names.get(l.sku_code, ""), "qty": l.qty, "unit": l.unit,
+        "unit_question": l.unit_question, "confidence": l.confidence, "score": l.score,
+        "alternatives": l.alternatives, "note": l.note,
+        "out_of_stock": bool(l.sku_code and l.sku and l.sku.stock_cases <= 0),
+    } for l in o.lines]}
+
+
+@app.post("/api/capture", status_code=201)
+def capture_order(body: CaptureRequest, retailer: Retailer = Depends(auth.current_retailer),
+                  db: Session = Depends(get_db)):
+    catalog = [cap.CatalogItem(s.code, s.name, s.category, s.keywords, s.stock_cases)
+               for s in db.scalars(select(Sku))]
+    aliases = {a.phrase: a.sku_code for a in db.scalars(select(Alias).where(Alias.retailer_id == retailer.id))}
+    lines = cap.capture(body.text, catalog, aliases, _llm)
+    # Nothing understood at all (no item matched and no quantity found) is not an order: say so.
+    if not any(c.sku_code or c.qty for c in lines):
+        raise HTTPException(422, "We could not find any items in that message. Try e.g. '5 case biscuit'.")
+    o = Order(retailer_id=retailer.id, status="draft_ai", source="ai_text", raw_text=body.text)
+    for c in lines:
+        o.lines.append(OrderLine(
+            sku_code=c.sku_code, original_text=c.original_text[:300], confidence=c.confidence,
+            score=c.score, unit_question=c.unit_question, qty=c.qty, unit=c.unit, note=c.note[:300],
+            alternatives=[{"code": a.code, "name": a.name, "score": a.score} for a in c.alternatives]))
+    db.add(o)
+    db.commit()
+    return _draft_json(o, db)
+
+
+def _own_draft(db: Session, retailer: Retailer, order_id: int) -> Order:
+    o = db.get(Order, order_id)
+    if not o or o.retailer_id != retailer.id or o.status != "draft_ai":
+        raise HTTPException(404, "Draft not found.")
+    return o
+
+
+@app.get("/api/capture/{order_id}")
+def get_draft(order_id: int, retailer: Retailer = Depends(auth.current_retailer), db: Session = Depends(get_db)):
+    return _draft_json(_own_draft(db, retailer, order_id), db)
+
+
+@app.post("/api/capture/{order_id}/confirm")
+def confirm_draft(order_id: int, body: ConfirmRequest, retailer: Retailer = Depends(auth.current_retailer),
+                  db: Session = Depends(get_db)):
+    """Nothing becomes an order until a person confirms every line (with an explicit SKU and unit)."""
+    o = _own_draft(db, retailer, order_id)
+    by_id = {l.id: l for l in o.lines}
+    if {c.line_id for c in body.lines} != set(by_id):
+        raise HTTPException(422, "Please review every line before confirming.")
+    skus = {s.code: s for s in db.scalars(select(Sku))}
+    items: list[CartItem] = []
+    for c in body.lines:
+        sku = skus.get(c.sku_code)
+        if not sku:
+            raise HTTPException(422, f"Unknown item {c.sku_code}.")
+        cases = c.qty
+        if c.unit == "piece":
+            if c.qty % sku.pieces_per_case:
+                raise HTTPException(422, f"{sku.name} is sold by the case of {sku.pieces_per_case}. "
+                                         f"{c.qty} pieces is not a whole number of cases.")
+            cases = c.qty // sku.pieces_per_case
+        items.append(CartItem(sku_code=c.sku_code, cases=cases))
+        by_id[c.line_id].sku_code, by_id[c.line_id].unit_question = c.sku_code, False
+    priced = _price(db, retailer, items)
+    if not priced.placeable:
+        db.rollback()
+        raise HTTPException(422, {"message": "Some items cannot be ordered.", "cart": _cart_json(priced)})
+    hold = check_credit(retailer.credit_limit_paise, retailer.outstanding_paise, priced.total_paise)
+    first = {}
+    for l in o.lines:
+        first.setdefault(l.sku_code, l)
+    prov = {code: (l.original_text, l.confidence, l.score, l.alternatives, l.qty, l.unit, l.note)
+            for code, l in first.items()}
+    o.lines.clear()
+    for l in priced.lines:
+        p = prov.get(l.sku_code, ("", "", 0.0, [], None, None, ""))
+        o.lines.append(OrderLine(sku_code=l.sku_code, cases=l.cases, free_cases=l.free_cases,
+                                 gross_paise=l.gross_paise, discount_paise=l.discount_paise,
+                                 net_paise=l.net_paise, original_text=p[0], confidence=p[1], score=p[2],
+                                 alternatives=p[3], qty=p[4], unit=p[5], note=p[6]))
+    o.total_paise = priced.total_paise
+    o.status, o.credit_hold_reason = ("on_hold", hold) if hold else ("placed", "")
+    db.commit()
+    return _order_json(o)

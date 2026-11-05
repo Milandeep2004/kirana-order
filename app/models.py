@@ -93,6 +93,9 @@ class OrderLine(Base):
     score: Mapped[float] = mapped_column(Float, default=0.0)
     alternatives: Mapped[list] = mapped_column(JSON, default=list)
     unit_question: Mapped[bool] = mapped_column(Boolean, default=False)
+    qty: Mapped[int | None] = mapped_column(Integer, nullable=True)  # as written by the retailer
+    unit: Mapped[str | None] = mapped_column(String(8), nullable=True)  # case | piece | None
+    note: Mapped[str] = mapped_column(String(300), default="")
     order: Mapped[Order] = relationship(back_populates="lines")
     sku: Mapped[Sku | None] = relationship()
 
