@@ -13,6 +13,13 @@ window.I18N = {
     orderPlaced: "Order placed", orderHeld: "Order sent for approval", orderRef: "Order number",
     keepShopping: "Keep shopping", demoHint: "Demo mode: use the quick logins below.", demoCode: "Demo code",
     wrongCode: "Wrong phone number or code.", enterPhone: "Enter a 10-digit mobile number.", deskSoon: "Order desk screens arrive in the next build step.",
+    byMessage: "By message", orders: "Orders", msgTitle: "Paste your order message",
+    msgHint: "Write it the way you would on WhatsApp, for example: 5 case biscuit, 2 case washing powder", readOrder: "Read my order", reading: "Reading your message…",
+    review: "Check each line", youWrote: "You wrote", confHigh: "Good match", confMed: "Please check", confLow: "Not sure",
+    unitAsk: "Is this in cases or pieces? Please choose.", unitCase: "Cases (peti)", unitPiece: "Pieces", orPick: "Or choose", chooseItem: "Choose an item",
+    confirmOrder: "Confirm order", fixLines: "Complete every line to continue.", startOver: "Start over", qty: "Quantity",
+    offStock: "Out of stock. Please choose another item.", stPlaced: "Order received", stHold: "Awaiting approval", stConfirmed: "Confirmed", stCancelled: "Cancelled",
+    repeat: "Repeat order", noOrders: "No orders yet", noOrdersHint: "Your orders will appear here.",
     youSave: "Scheme savings", lineTotal: "Line total", language: "हिंदी"
   },
   hi: {
@@ -28,6 +35,13 @@ window.I18N = {
     orderPlaced: "ऑर्डर हो गया", orderHeld: "ऑर्डर मंज़ूरी के लिए भेजा गया", orderRef: "ऑर्डर नंबर",
     keepShopping: "और सामान लें", demoHint: "डेमो मोड: नीचे के क्विक लॉगिन इस्तेमाल करें।", demoCode: "डेमो कोड",
     wrongCode: "फ़ोन नंबर या कोड गलत है।", enterPhone: "10 अंकों का मोबाइल नंबर डालें।", deskSoon: "ऑर्डर डेस्क स्क्रीन अगले चरण में आएँगी।",
+    byMessage: "संदेश से", orders: "ऑर्डर", msgTitle: "अपना ऑर्डर संदेश लिखें",
+    msgHint: "वैसे ही लिखें जैसे WhatsApp पर लिखते हैं, जैसे: 5 पेटी बिस्कुट, 2 पेटी वॉशिंग पाउडर", readOrder: "मेरा ऑर्डर पढ़ें", reading: "संदेश पढ़ रहे हैं…",
+    review: "हर लाइन जाँचें", youWrote: "आपने लिखा", confHigh: "सही मिलान", confMed: "कृपया जाँचें", confLow: "पक्का नहीं",
+    unitAsk: "यह पेटी में है या पीस में? कृपया चुनें।", unitCase: "पेटी", unitPiece: "पीस", orPick: "या चुनें", chooseItem: "सामान चुनें",
+    confirmOrder: "ऑर्डर पक्का करें", fixLines: "आगे बढ़ने के लिए हर लाइन भरें।", startOver: "फिर से शुरू करें", qty: "मात्रा",
+    offStock: "स्टॉक खत्म। कृपया कोई और सामान चुनें।", stPlaced: "ऑर्डर मिला", stHold: "मंज़ूरी का इंतज़ार", stConfirmed: "पक्का", stCancelled: "रद्द",
+    repeat: "फिर से ऑर्डर करें", noOrders: "अभी कोई ऑर्डर नहीं", noOrdersHint: "आपके ऑर्डर यहाँ दिखेंगे।",
     youSave: "स्कीम बचत", lineTotal: "लाइन कुल", language: "English"
   }
 };

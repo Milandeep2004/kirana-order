@@ -43,14 +43,21 @@ async function api(path, opts = {}) {
 const loadCart = () => { try { state.cart = JSON.parse(store.get("cart") || "{}"); } catch { state.cart = {}; } };
 const saveCart = () => store.set("cart", JSON.stringify(state.cart));
 const cartCount = () => Object.values(state.cart).reduce((a, b) => a + b, 0);
-function setQty(code, q) { q = Math.max(0, Math.min(10000, q | 0)); if (q) state.cart[code] = q; else delete state.cart[code]; saveCart(); }
+function setQty(code, q) { q = Math.max(0, Math.min(10000, q | 0)); if (q) state.cart[code] = q; else delete state.cart[code]; saveCart(); updateCartTab(); }
+function updateCartTab() { const el = document.getElementById("tab-cart"); if (el) el.textContent = cartCount() ? `${t("cart")} (${cartCount()})` : t("cart"); }
 
 // ---------- shell ----------
+function nav() {
+  const cur = location.hash || "#/catalogue";
+  const tabs = [["#/catalogue", t("catalogue")], ["#/message", t("byMessage")], ["#/orders", t("orders")], ["#/cart", cartCount() ? `${t("cart")} (${cartCount()})` : t("cart")]];
+  return h("nav", { class: "tabs", "aria-label": "Main" }, tabs.map(([href, label]) => h("a", { href, class: "tab", id: href === "#/cart" ? "tab-cart" : false, "aria-current": cur === href ? "page" : false }, label)));
+}
 function header() {
   return h("header", { class: "top" }, h("div", { class: "wrap" },
     h("div", { class: "brand" }, t("appName"), state.me?.shop && h("span", { class: "shop", text: state.me.shop })),
     h("button", { class: "link", type: "button", onclick: toggleLang }, t("language")),
-    state.me && h("button", { class: "link", type: "button", onclick: logout }, t("logout"))));
+    state.me && h("button", { class: "link", type: "button", onclick: logout }, t("logout"))),
+    state.me?.role === "retailer" && nav());
 }
 function render(...parts) { $app.replaceChildren(header(), h("main", { class: "wrap" }, ...parts.flat())); }
 function toggleLang() { state.lang = state.lang === "en" ? "hi" : "en"; store.set("lang", state.lang); document.documentElement.lang = state.lang; route(); }
@@ -203,6 +210,93 @@ function viewDone() {
     h("button", { class: "btn", type: "button", onclick: () => go("#/catalogue") }, t("keepShopping"))));
 }
 
+
+// ---------- order by message (AI capture) ----------
+async function viewCapture() {
+  let text = state.draftText || "", err = "", busy = false;
+  if (!state.cat) { try { state.cat = await api("/api/catalogue"); } catch (e) { if (e.message === "auth") return; } }
+  const draw = () => {
+    const ta = h("textarea", { maxlength: 2000, placeholder: "bhaiya 5 peti biscuit chhota, 2 peti washing powder 1 kilo…", "aria-label": t("msgTitle"), oninput: (e) => { text = e.target.value; state.draftText = text; } });
+    ta.value = text;
+    const btn = h("button", { class: "btn", type: "button", disabled: busy, onclick: async () => {
+      if (text.trim().length < 3) { err = t("msgHint"); return draw(); }
+      busy = true; err = ""; draw();
+      try { const d = await api("/api/capture", { method: "POST", body: { text } }); busy = false; viewReview(d); }
+      catch (e) { if (e.message === "auth") return; busy = false; err = e.offline ? t("offlineCart") : e.message; draw(); }
+    } }, busy ? t("reading") : t("readOrder"));
+    render(h("h2", { class: "title", text: t("msgTitle") }), h("p", { class: "hint", text: t("msgHint") }), ta,
+      err && h("p", { class: "msg err", role: "alert", text: err }), h("div", { class: "field" }, btn));
+  };
+  draw();
+}
+
+function viewReview(d) {
+  const items = state.cat?.items || [];
+  const byCode = Object.fromEntries(items.map((i) => [i.code, i]));
+  const rows = d.lines.map((l) => ({ id: l.line_id, orig: l.original_text, sku: l.sku_code, qty: l.qty, unit: l.unit_question ? null : l.unit || null,
+    unitQ: l.unit_question, conf: l.confidence, alts: l.alternatives, note: l.note }));
+  const out = (r) => !!(r.sku && byCode[r.sku] && byCode[r.sku].stock_status === "out");
+  const ok = (r) => r.sku && r.qty >= 1 && r.unit && !out(r);
+  let err = "", busy = false;
+  const draw = () => {
+    const all = rows.every(ok);
+    const btn = h("button", { class: "btn", type: "button", disabled: !all || busy, onclick: async () => {
+      busy = true; draw();
+      try {
+        const o = await api(`/api/capture/${d.id}/confirm`, { method: "POST", body: { lines: rows.map((r) => ({ line_id: r.id, sku_code: r.sku, qty: r.qty, unit: r.unit })) } });
+        state.last = o; state.draftText = ""; go("#/done");
+      } catch (e) {
+        if (e.message === "auth") return;
+        busy = false; const iss = e.data?.detail?.cart?.lines?.flatMap((l) => l.issues.map((i) => i.message));
+        err = iss?.length ? iss.join(" ") : e.message; draw();
+      }
+    } }, t("confirmOrder"));
+    render(h("h2", { class: "title", text: t("review") }),
+      rows.map((r) => {
+        const sel = h("select", { "aria-label": t("chooseItem"), onchange: (e) => { r.sku = e.target.value || null; draw(); } },
+          h("option", { value: "" }, t("chooseItem")), items.map((i) => h("option", { value: i.code, selected: i.code === r.sku }, i.name)));
+        const alts = r.alts.filter((a) => a.code !== r.sku);
+        return h("div", { class: `rev${ok(r) ? "" : " bad"}` },
+          h("div", { class: "quote" }, h("small", { text: t("youWrote") }), `“${r.orig}”`),
+          h("span", { class: `conf ${r.conf || "low"}`, text: r.conf === "high" ? t("confHigh") : r.conf === "medium" ? t("confMed") : t("confLow") }),
+          r.note && h("div", { class: "sub2", text: r.note }),
+          sel,
+          alts.length > 0 && h("div", { class: "alts" }, t("orPick") + ":", alts.map((a) => h("button", { class: "chip", type: "button", onclick: () => { r.sku = a.code; draw(); } }, a.name))),
+          out(r) && h("p", { class: "msg err", role: "alert", text: t("offStock") }),
+          r.unitQ && !r.unit && h("p", { class: "msg warn", role: "alert", text: t("unitAsk") }),
+          h("div", { class: "qrow" },
+            h("label", { class: "field", style: "margin:0" }, h("span", { text: t("qty") }),
+              h("input", { class: "qty", type: "number", inputmode: "numeric", min: 1, max: 10000, value: r.qty || "", oninput: (e) => { r.qty = parseInt(e.target.value, 10) || null; btn.disabled = !rows.every(ok) || busy; } })),
+            h("fieldset", { class: "units" }, h("legend", { class: "sub2", text: "" }),
+              [["case", t("unitCase")], ["piece", t("unitPiece")]].map(([v, label]) =>
+                h("label", null, h("input", { type: "radio", name: `u${r.id}`, value: v, checked: r.unit === v, onchange: () => { r.unit = v; draw(); } }), label)))));
+      }),
+      err && h("p", { class: "msg err", role: "alert", text: err }),
+      !all && h("p", { class: "hint", text: t("fixLines") }),
+      btn, h("div", { class: "field" }, h("button", { class: "btn secondary", type: "button", onclick: viewCapture }, t("startOver"))));
+  };
+  draw();
+}
+
+// ---------- order history + repeat ----------
+async function viewOrders() {
+  render(skeleton());
+  let list;
+  try { list = await api("/api/orders"); } catch (e) { if (e.message === "auth") return; return render(errorBox(e.offline ? t("offlineCart") : e.message, viewOrders)); }
+  if (!list.length) return render(h("div", { class: "empty" }, h("h2", { text: t("noOrders") }), h("p", { text: t("noOrdersHint" ) }), h("button", { class: "btn sm", type: "button", onclick: () => go("#/catalogue") }, t("browse"))));
+  const label = { placed: t("stPlaced"), on_hold: t("stHold"), confirmed: t("stConfirmed"), exported: t("stConfirmed"), cancelled: t("stCancelled") };
+  render(h("h2", { class: "title", text: t("orders") }), list.map((o) => h("div", { class: "line" },
+    h("div", { class: "row" }, h("strong", { text: `#${o.id}` }), h("span", { class: `st ${o.status}`, text: label[o.status] || o.status })),
+    h("div", { class: "sub2", text: new Date(o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) }),
+    o.lines.map((l) => h("div", { class: "oline", text: `${l.name}: ${l.cases}${l.free_cases ? ` + ${l.free_cases} ${t("free")}` : ""} ${t("cases")}` })),
+    h("div", { class: "row" }, h("strong", { text: rupees(o.total_paise) }),
+      h("button", { class: "btn sm secondary", type: "button", onclick: async (e) => {
+        e.currentTarget.disabled = true;
+        try { const c = await api(`/api/orders/${o.id}/repeat`); state.cart = {}; c.lines.forEach((l) => { if (l.cases > 0) state.cart[l.sku_code] = l.cases; }); saveCart(); go("#/cart"); }
+        catch (err) { if (err.message !== "auth") { e.currentTarget.disabled = false; } }
+      } }, t("repeat"))))));
+}
+
 // ---------- routing ----------
 function route() {
   const r = location.hash || "#/catalogue";
@@ -210,6 +304,8 @@ function route() {
   if (state.me.role === "desk") return render(h("p", { class: "msg info", text: t("deskSoon") }));
   if (r === "#/cart") return viewCart();
   if (r === "#/done") return viewDone();
+  if (r === "#/message") return viewCapture();
+  if (r === "#/orders") return viewOrders();
   if (r === "#/login") return go("#/catalogue");
   return viewCatalogue();
 }
