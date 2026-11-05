@@ -5,3 +5,4 @@ __pycache__/
 .pytest_cache/
 .venv/
 exports/
+test_kirana.db

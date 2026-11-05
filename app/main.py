@@ -1,0 +1,134 @@
+from contextlib import asynccontextmanager
+
+from fastapi import Depends, FastAPI, HTTPException, Response
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from . import auth
+from .db import Base, SessionLocal, engine, get_db
+from .models import Retailer, Scheme, Sku, User
+from .pricing import CartLine, adjust_price, price_cart
+from .seed import load_pricing, seed
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(engine)
+    with SessionLocal() as db:
+        seed(db)
+    yield
+
+
+app = FastAPI(title="Kirana Order", lifespan=lifespan)
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+# ---------- auth ----------
+class OtpRequest(BaseModel):
+    phone: str
+
+
+class LoginRequest(BaseModel):
+    phone: str
+    otp: str = Field(min_length=4, max_length=8)
+
+
+@app.post("/api/auth/request-otp")
+def request_otp(body: OtpRequest, db: Session = Depends(get_db)):
+    if not auth.valid_phone(body.phone):
+        raise HTTPException(422, "Enter a valid 10-digit mobile number.")
+    # Same answer whether or not the number is registered, so numbers cannot be probed.
+    return {"sent": True}
+
+
+@app.post("/api/auth/login")
+def login(body: LoginRequest, response: Response, db: Session = Depends(get_db)):
+    if not auth.valid_phone(body.phone):
+        raise HTTPException(422, "Enter a valid 10-digit mobile number.")
+    if auth.too_many_failures(body.phone):
+        raise HTTPException(429, "Too many wrong codes. Try again in a few minutes.")
+    user = db.scalar(select(User).where(User.phone == body.phone))
+    if not user or not auth.check_otp(body.phone, body.otp):
+        auth.record_failure(body.phone)
+        raise HTTPException(401, "Wrong phone number or code.")
+    response.set_cookie(auth.COOKIE, auth.make_session(user.id), max_age=auth.SESSION_SECONDS,
+                        httponly=True, samesite="lax")
+    return {"role": user.role, "name": user.name}
+
+
+@app.post("/api/auth/logout")
+def logout(response: Response):
+    response.delete_cookie(auth.COOKIE)
+    return {"ok": True}
+
+
+@app.get("/api/me")
+def me(user: User = Depends(auth.current_user), db: Session = Depends(get_db)):
+    out = {"role": user.role, "name": user.name}
+    if user.role == "retailer":
+        r = db.scalar(select(Retailer).where(Retailer.user_id == user.id))
+        out["shop"] = r.shop_name if r else None
+    return out
+
+
+# ---------- catalogue (retailer-specific prices; visible only to that retailer) ----------
+def _scheme_text(s: Scheme) -> str:
+    if s.type == "free_goods":
+        return f"Buy {s.buy_qty} cases, get {s.free_qty} free"
+    return f"{s.discount_bp / 100:g}% off on {s.min_cases}+ cases"
+
+
+@app.get("/api/catalogue")
+def catalogue(retailer: Retailer = Depends(auth.current_retailer), db: Session = Depends(get_db)):
+    schemes: dict[str, list[str]] = {}
+    for sc in db.scalars(select(Scheme)):
+        schemes.setdefault(sc.sku_code, []).append(_scheme_text(sc))
+    items = []
+    for s in db.scalars(select(Sku).order_by(Sku.category, Sku.name)):
+        case_price = adjust_price(s.case_price_paise, retailer.price_discount_bp)
+        stock = "out" if s.stock_cases <= 0 else "low" if s.stock_cases < 50 else "in"
+        items.append({
+            "code": s.code, "name": s.name, "category": s.category, "color": s.color,
+            "pieces_per_case": s.pieces_per_case,
+            "piece_price_paise": adjust_price(s.piece_price_paise, retailer.price_discount_bp),
+            "case_price_paise": case_price, "stock_status": stock,
+            "schemes": schemes.get(s.code, []),
+        })
+    return {"gst_note": "Prices exclude GST", "items": items}
+
+
+# ---------- cart pricing ----------
+class CartItem(BaseModel):
+    sku_code: str = Field(max_length=24)
+    cases: int = Field(ge=1, le=10000)
+
+
+class CartRequest(BaseModel):
+    lines: list[CartItem] = Field(max_length=100)
+
+
+def _price(db: Session, retailer: Retailer, items: list[CartItem]):
+    skus, schemes = load_pricing(db, retailer)
+    return price_cart([CartLine(i.sku_code, i.cases) for i in items], skus, schemes)
+
+
+def _cart_json(priced):
+    return {
+        "lines": [{
+            "sku_code": l.sku_code, "name": l.name, "cases": l.cases, "free_cases": l.free_cases,
+            "case_price_paise": l.case_price_paise, "gross_paise": l.gross_paise,
+            "discount_paise": l.discount_paise, "net_paise": l.net_paise, "notes": l.notes,
+            "issues": [{"code": i.code, "message": i.message, "max_orderable": i.max_orderable} for i in l.issues],
+        } for l in priced.lines],
+        "total_paise": priced.total_paise, "placeable": priced.placeable, "gst_note": "Prices exclude GST",
+    }
+
+
+@app.post("/api/cart/price")
+def cart_price(body: CartRequest, retailer: Retailer = Depends(auth.current_retailer), db: Session = Depends(get_db)):
+    return _cart_json(_price(db, retailer, body.lines))
