@@ -304,3 +304,181 @@ def confirm_draft(order_id: int, body: ConfirmRequest, retailer: Retailer = Depe
     o.status, o.credit_hold_reason = ("on_hold", hold) if hold else ("placed", "")
     db.commit()
     return _order_json(o)
+
+
+# ---------- order desk ----------
+import csv  # noqa: E402
+import io  # noqa: E402
+
+from fastapi.responses import PlainTextResponse  # noqa: E402
+
+desk_only = auth.require_role("desk")
+EDITABLE = ("placed", "on_hold")
+
+
+def _desk_order_json(o: Order, db: Session):
+    j = _order_json(o)
+    r = o.retailer
+    j["retailer"] = {"id": r.id, "shop_name": r.shop_name, "salesman": r.salesman_name,
+                     "credit_limit_paise": r.credit_limit_paise, "outstanding_paise": r.outstanding_paise}
+    j["raw_text"] = o.raw_text
+    j["desk_note"] = o.desk_note
+    for out, l in zip(j["lines"], o.lines):
+        out.update({"line_id": l.id, "original_text": l.original_text, "confidence": l.confidence,
+                    "alternatives": l.alternatives, "note": l.note,
+                    "stock_cases": l.sku.stock_cases if l.sku else None})
+    return j
+
+
+def _desk_order(db: Session, order_id: int) -> Order:
+    o = db.get(Order, order_id)
+    if not o or o.status == "draft_ai":
+        raise HTTPException(404, "Order not found.")
+    return o
+
+
+@app.get("/api/desk/orders")
+def desk_queue(status: str | None = None, _: User = Depends(desk_only), db: Session = Depends(get_db)):
+    q = select(Order).where(Order.status != "draft_ai")
+    if status:
+        q = q.where(Order.status == status)
+    rows = db.scalars(q.order_by(Order.created_at.desc()).limit(200))
+    return [{"id": o.id, "status": o.status, "source": o.source, "shop_name": o.retailer.shop_name,
+             "total_paise": o.total_paise, "credit_hold_reason": o.credit_hold_reason,
+             "created_at": o.created_at.isoformat(), "line_count": len(o.lines)} for o in rows]
+
+
+@app.get("/api/desk/orders/{order_id}")
+def desk_order(order_id: int, _: User = Depends(desk_only), db: Session = Depends(get_db)):
+    return _desk_order_json(_desk_order(db, order_id), db)
+
+
+class DeskLine(BaseModel):
+    line_id: int | None = None  # existing line (lets us learn an alias if the SKU is changed)
+    sku_code: str = Field(max_length=24)
+    cases: int = Field(ge=1, le=10000)
+
+
+class DeskEdit(BaseModel):
+    lines: list[DeskLine] = Field(min_length=1, max_length=100)
+    note: str = Field(default="", max_length=300)
+
+
+@app.put("/api/desk/orders/{order_id}/lines")
+def desk_edit(order_id: int, body: DeskEdit, _: User = Depends(desk_only), db: Session = Depends(get_db)):
+    o = _desk_order(db, order_id)
+    if o.status not in EDITABLE:
+        raise HTTPException(409, f"A {o.status} order can no longer be edited.")
+    old = {l.id: l for l in o.lines}
+    priced = _price(db, o.retailer, [CartItem(sku_code=l.sku_code, cases=l.cases) for l in body.lines])
+    if not priced.placeable:
+        raise HTTPException(422, {"message": "Some items cannot be ordered.", "cart": _cart_json(priced)})
+    # Learn aliases: the desk changed which SKU a retailer's own words refer to.
+    for dl in body.lines:
+        prev = old.get(dl.line_id) if dl.line_id else None
+        if prev and prev.original_text and prev.sku_code != dl.sku_code:
+            phrase = cap.clean_phrase(cap.strip_quantity(prev.original_text))
+            if phrase:
+                existing = db.scalar(select(Alias).where(Alias.retailer_id == o.retailer_id,
+                                                         Alias.phrase == phrase))
+                if existing:
+                    existing.sku_code = dl.sku_code
+                else:
+                    db.add(Alias(retailer_id=o.retailer_id, phrase=phrase, sku_code=dl.sku_code,
+                                 from_desk_correction=True))
+    prov = {l.sku_code: l for l in o.lines}
+    o.lines.clear()
+    for l in priced.lines:
+        p = prov.get(l.sku_code)
+        o.lines.append(OrderLine(sku_code=l.sku_code, cases=l.cases, free_cases=l.free_cases,
+                                 gross_paise=l.gross_paise, discount_paise=l.discount_paise,
+                                 net_paise=l.net_paise,
+                                 original_text=p.original_text if p else "", confidence=p.confidence if p else "",
+                                 score=p.score if p else 0.0, alternatives=p.alternatives if p else [],
+                                 qty=p.qty if p else None, unit=p.unit if p else None,
+                                 note=p.note if p else ""))
+    o.total_paise = priced.total_paise
+    if body.note:
+        o.desk_note = body.note
+    if o.status == "on_hold":
+        o.credit_hold_reason = check_credit(o.retailer.credit_limit_paise, o.retailer.outstanding_paise,
+                                            o.total_paise) or "Within credit limit after edit; ready to release."
+    db.commit()
+    return _desk_order_json(o, db)
+
+
+class DeskNote(BaseModel):
+    note: str = Field(default="", max_length=300)
+
+
+@app.post("/api/desk/orders/{order_id}/release")
+def desk_release(order_id: int, body: DeskNote, _: User = Depends(desk_only), db: Session = Depends(get_db)):
+    o = _desk_order(db, order_id)
+    if o.status != "on_hold":
+        raise HTTPException(409, "Only orders on hold can be released.")
+    o.status = "placed"
+    o.desk_note = body.note or o.desk_note
+    db.commit()
+    return _desk_order_json(o, db)
+
+
+@app.post("/api/desk/orders/{order_id}/confirm")
+def desk_confirm(order_id: int, _: User = Depends(desk_only), db: Session = Depends(get_db)):
+    """Confirm = stock is re-checked now, deducted (bought + free cases), and credit exposure increases."""
+    o = _desk_order(db, order_id)
+    if o.status == "on_hold":
+        raise HTTPException(409, "Release the credit hold before confirming.")
+    if o.status != "placed":
+        raise HTTPException(409, f"A {o.status} order cannot be confirmed.")
+    priced = _price(db, o.retailer, [CartItem(sku_code=l.sku_code, cases=l.cases) for l in o.lines if l.sku_code])
+    if not priced.placeable:
+        raise HTTPException(409, {"message": "Stock has changed since this order was placed.",
+                                  "cart": _cart_json(priced)})
+    for l in o.lines:
+        db.get(Sku, l.sku_code).stock_cases -= l.cases + l.free_cases
+    o.retailer.outstanding_paise += o.total_paise
+    o.status = "confirmed"
+    db.commit()
+    return _desk_order_json(o, db)
+
+
+@app.post("/api/desk/orders/{order_id}/cancel")
+def desk_cancel(order_id: int, body: DeskNote, _: User = Depends(desk_only), db: Session = Depends(get_db)):
+    o = _desk_order(db, order_id)
+    if o.status not in EDITABLE:
+        raise HTTPException(409, f"A {o.status} order cannot be cancelled here.")
+    o.status, o.desk_note = "cancelled", body.note or o.desk_note
+    db.commit()
+    return _desk_order_json(o, db)
+
+
+def _csv_safe(v) -> str:
+    """Stop spreadsheet formula injection from retailer-controlled text."""
+    s = str(v)
+    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
+
+
+TALLY_COLUMNS = ["Voucher No", "Date", "Party Name", "Item Code", "Item Name", "Qty (cases)",
+                 "Free Qty (cases)", "Rate per case (excl GST)", "Discount", "Amount (excl GST)", "Narration"]
+
+
+@app.post("/api/desk/export/tally", response_class=PlainTextResponse)
+def tally_export(_: User = Depends(desk_only), db: Session = Depends(get_db)):
+    """CSV of all confirmed orders (our assumed Tally layout), then mark them exported."""
+    orders = list(db.scalars(select(Order).where(Order.status == "confirmed").order_by(Order.id)))
+    if not orders:
+        raise HTTPException(404, "No confirmed orders to export.")
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(TALLY_COLUMNS)
+    for o in orders:
+        for l in o.lines:
+            rate = l.gross_paise // l.cases if l.cases else 0
+            w.writerow([f"ORD-{o.id:06d}", o.created_at.strftime("%d-%m-%Y"), _csv_safe(o.retailer.shop_name),
+                        l.sku_code, _csv_safe(l.sku.name), l.cases, l.free_cases, f"{rate / 100:.2f}",
+                        f"{l.discount_paise / 100:.2f}", f"{l.net_paise / 100:.2f}",
+                        _csv_safe(o.desk_note)])
+        o.status = "exported"
+    db.commit()
+    return PlainTextResponse(buf.getvalue(), media_type="text/csv",
+                             headers={"Content-Disposition": 'attachment; filename="tally-orders.csv"'})
