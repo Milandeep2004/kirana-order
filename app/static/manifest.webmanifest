@@ -1,0 +1,9 @@
+{
+  "name": "Kirana Order",
+  "short_name": "Kirana",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafaf7",
+  "theme_color": "#1f6f4a",
+  "icons": [{"src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]
+}

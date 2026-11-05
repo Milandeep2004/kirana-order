@@ -1,6 +1,11 @@
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,11 +26,40 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Kirana Order", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=500)  # small payloads matter on 3G
+
+STATIC = Path(__file__).parent / "static"
+CSP = ("default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
+       "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    resp = await call_next(request)
+    resp.headers["Content-Security-Policy"] = CSP
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["Referrer-Policy"] = "same-origin"
+    if request.url.path.startswith("/api/"):
+        resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/config")
+def public_config():
+    """Only used by the login screen. The demo code is exposed ONLY when DEMO_MODE=1."""
+    from .config import DEMO_MODE, DEMO_OTP
+    out = {"demo_mode": DEMO_MODE}
+    if DEMO_MODE:
+        out["demo_otp"] = DEMO_OTP
+        out["demo_users"] = [{"phone": "9000000001", "label": "Retailer: Sharma General Store"},
+                             {"phone": "9000000002", "label": "Retailer: Gupta Kirana (tight credit)"},
+                             {"phone": "9000000100", "label": "Order desk"}]
+    return out
 
 
 # ---------- auth ----------
@@ -73,6 +107,9 @@ def me(user: User = Depends(auth.current_user), db: Session = Depends(get_db)):
     if user.role == "retailer":
         r = db.scalar(select(Retailer).where(Retailer.user_id == user.id))
         out["shop"] = r.shop_name if r else None
+        if r:
+            out["credit_limit_paise"] = r.credit_limit_paise
+            out["outstanding_paise"] = r.outstanding_paise
     return out
 
 
@@ -482,3 +519,18 @@ def tally_export(_: User = Depends(desk_only), db: Session = Depends(get_db)):
     db.commit()
     return PlainTextResponse(buf.getvalue(), media_type="text/csv",
                              headers={"Content-Disposition": 'attachment; filename="tally-orders.csv"'})
+
+
+# ---------- web app shell (static files, installable PWA) ----------
+@app.get("/", include_in_schema=False)
+def index():
+    return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    # Must be served from the root so it can control the whole app.
+    return FileResponse(STATIC / "sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
