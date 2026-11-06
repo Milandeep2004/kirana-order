@@ -45,8 +45,8 @@ async def security_headers(request, call_next):
     return resp
 
 
-@app.get("/health")
-def health():
+@app.api_route("/health", methods=["GET", "HEAD"])
+def health():  # HEAD too: uptime monitors often probe with HEAD
     return {"status": "ok"}
 
 
@@ -529,7 +529,7 @@ def tally_export(_: User = Depends(desk_only), db: Session = Depends(get_db)):
 
 
 # ---------- web app shell (static files, installable PWA) ----------
-@app.get("/", include_in_schema=False)
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 def index():
     return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 

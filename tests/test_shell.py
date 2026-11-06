@@ -17,3 +17,8 @@ def test_api_responses_are_not_cacheable(client):
 def test_config_exposes_demo_code_only_in_demo_mode(client):
     cfg = client.get("/api/config").json()
     assert cfg["demo_mode"] is True and cfg["demo_otp"]  # tests run with DEMO_MODE=1
+
+
+def test_head_requests_are_accepted_for_uptime_monitors(client):
+    assert client.head("/health").status_code == 200
+    assert client.head("/").status_code == 200
