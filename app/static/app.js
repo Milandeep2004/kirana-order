@@ -53,13 +53,13 @@ function nav() {
   return h("nav", { class: "tabs", "aria-label": "Main" }, tabs.map(([href, label]) => h("a", { href, class: "tab", id: href === "#/cart" ? "tab-cart" : false, "aria-current": cur === href ? "page" : false }, label)));
 }
 function header() {
-  return h("header", { class: "top" }, h("div", { class: "wrap" },
+  return h("header", { class: state.me?.role === "desk" ? "top wide" : "top" }, h("div", { class: "wrap" },
     h("div", { class: "brand" }, t("appName"), state.me?.shop && h("span", { class: "shop", text: state.me.shop })),
-    h("button", { class: "link", type: "button", onclick: toggleLang }, t("language")),
+    state.me?.role !== "desk" && h("button", { class: "link", type: "button", onclick: toggleLang }, t("language")),
     state.me && h("button", { class: "link", type: "button", onclick: logout }, t("logout"))),
     state.me?.role === "retailer" && nav());
 }
-function render(...parts) { $app.replaceChildren(header(), h("main", { class: "wrap" }, ...parts.flat())); }
+function render(...parts) { $app.replaceChildren(header(), h("main", { class: state.me?.role === "desk" ? "wrap wide" : "wrap" }, ...parts.flat())); }
 function toggleLang() { state.lang = state.lang === "en" ? "hi" : "en"; store.set("lang", state.lang); document.documentElement.lang = state.lang; route(); }
 async function logout() {
   try { await api("/api/auth/logout", { method: "POST" }); } catch { /* ignore */ }
@@ -297,11 +297,98 @@ async function viewOrders() {
       } }, t("repeat"))))));
 }
 
+
+// ---------- order desk (English only: internal staff screen) ----------
+const DESK_STATUS = { placed: "Placed", on_hold: "On hold", confirmed: "Confirmed", exported: "Exported", cancelled: "Cancelled" };
+const stChip = (s) => h("span", { class: `st ${s}`, text: DESK_STATUS[s] || s });
+const detailMsg = (e) => { const iss = e.data?.detail?.cart?.lines?.flatMap((l) => l.issues.map((i) => `${l.name}: ${i.message}`)); return iss?.length ? iss.join(" ") : e.message; };
+
+async function exportTally(setMsg) {
+  try {
+    const res = await fetch("/api/desk/export/tally", { method: "POST", credentials: "same-origin" });
+    if (!res.ok) { const j = await res.json().catch(() => ({})); return setMsg("err", typeof j.detail === "string" ? j.detail : "Export failed."); }
+    const url = URL.createObjectURL(await res.blob());
+    const a = h("a", { href: url, download: "tally-orders.csv" }); document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    setMsg("info", "Exported. Those orders are now marked Exported.");
+  } catch { setMsg("err", "You are offline."); }
+}
+
+async function viewDeskQueue() {
+  const filter = state.deskFilter || "";
+  render(skeleton());
+  let list;
+  try { list = await api("/api/desk/orders" + (filter ? `?status=${filter}` : "")); }
+  catch (e) { if (e.message === "auth") return; return render(errorBox(e.offline ? "You are offline." : e.message, viewDeskQueue)); }
+  const box = h("div");
+  const setMsg = (kind, text) => { box.replaceChildren(h("p", { class: `msg ${kind}`, role: "status", text })); if (kind === "info") setTimeout(viewDeskQueue, 800); };
+  const chips = [["", "All"], ["on_hold", "On hold"], ["placed", "Placed"], ["confirmed", "Confirmed"], ["exported", "Exported"]];
+  render(h("div", { class: "dhead" }, h("h2", { class: "title", style: "margin:0", text: "Order desk" }),
+      h("button", { class: "btn sm", type: "button", onclick: () => exportTally(setMsg) }, "Export confirmed to Tally")), box,
+    h("div", { class: "chips", role: "group" }, chips.map(([v, label]) => h("button", { class: "chip", type: "button", "aria-pressed": String(filter === v), onclick: () => { state.deskFilter = v; viewDeskQueue(); } }, label))),
+    list.length === 0 ? h("div", { class: "empty" }, h("h2", { text: "No orders here" }), h("p", { text: "Nothing matches this filter." })) :
+    h("div", { class: "qlist" }, list.map((o) => h("a", { class: "qrow-card", href: `#/desk/order/${o.id}` },
+      h("strong", { text: `#${o.id}` }),
+      h("div", {}, h("div", {}, o.shop_name, o.source === "ai_text" && h("span", { class: "ai", text: "AI message" })),
+        h("div", { class: "meta", text: `${new Date(o.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · ${o.line_count} lines${o.credit_hold_reason ? " · " + o.credit_hold_reason : ""}` })),
+      h("div", { class: "amt" }, stChip(o.status), h("div", { text: rupees(o.total_paise) }))))));
+}
+
+async function viewDeskOrder(id) {
+  render(skeleton());
+  let o, skus;
+  try { [o, skus] = await Promise.all([api(`/api/desk/orders/${id}`), api("/api/desk/skus")]); }
+  catch (e) { if (e.message === "auth") return; return render(h("a", { class: "back", href: "#/desk" }, "← Queue"), errorBox(e.status === 404 ? "Order not found." : e.message, () => viewDeskOrder(id))); }
+  const rows = o.lines.map((l) => ({ line_id: l.line_id, sku: l.sku_code, cases: l.cases, l }));
+  let dirty = false, msg = null, busy = false, note = o.desk_note || "";
+  const editable = o.status === "placed" || o.status === "on_hold";
+  const act = async (fn) => { if (busy) return; busy = true; msg = null; draw();
+    try { const r = await fn(); busy = false; if (r) { viewDeskOrder(id); return; } } catch (e) { if (e.message === "auth") return; busy = false; msg = ["err", detailMsg(e)]; } draw(); };
+  const draw = () => {
+    const r = o.retailer, avail = r.credit_limit_paise - r.outstanding_paise;
+    const valid = rows.length > 0 && rows.every((x) => x.sku && x.cases >= 1);
+    render(h("a", { class: "back", href: "#/desk" }, "← Queue"),
+      h("div", { class: "dhead" }, h("h2", { class: "title", style: "margin:0", text: `Order #${o.id}` }), stChip(o.status)),
+      o.credit_hold_reason && h("p", { class: "msg warn", text: o.credit_hold_reason }),
+      msg && h("p", { class: `msg ${msg[0]}`, role: "alert", text: msg[1] }),
+      h("div", { class: "panel kv" },
+        h("div", {}, h("b", { text: "Shop" }), r.shop_name), h("div", {}, h("b", { text: "Salesman" }), r.salesman || "-"),
+        h("div", {}, h("b", { text: "Credit limit" }), rupees(r.credit_limit_paise)), h("div", {}, h("b", { text: "Outstanding" }), rupees(r.outstanding_paise)),
+        h("div", {}, h("b", { text: "Available" }), rupees(avail)), h("div", {}, h("b", { text: "Order total" }), rupees(o.total_paise))),
+      o.raw_text && h("div", { class: "panel" }, h("b", { class: "sub2", text: "Original message" }), h("p", { class: "quote", text: o.raw_text })),
+      h("div", { class: "panel" },
+        rows.map((x, i) => h("div", { class: "dline" },
+          editable ? h("select", { "aria-label": "Item", onchange: (e) => { x.sku = e.target.value || null; dirty = true; draw(); } },
+              h("option", { value: "" }, "Choose an item"), skus.map((k) => h("option", { value: k.code, selected: k.code === x.sku }, `${k.name}${k.stock_cases <= 0 ? " (out of stock)" : ""}`)))
+            : h("span", { text: x.l.name }),
+          editable ? h("input", { class: "qty", type: "number", min: 1, max: 10000, "aria-label": "Cases", value: x.cases || "", style: "width:90px",
+              oninput: (e) => { x.cases = parseInt(e.target.value, 10) || 0; dirty = true; saveBtn.disabled = busy || !rows.every((y) => y.sku && y.cases >= 1); confirmBtn && (confirmBtn.disabled = true); } })
+            : h("span", { text: `${x.cases} cases` }),
+          h("div", { class: "amt" }, x.l.free_cases ? `+${x.l.free_cases} free · ` : "", rupees(x.l.net_paise)),
+          x.l.original_text && h("div", { class: "src" }, `Retailer wrote “${x.l.original_text}”`, x.l.confidence && ` · ${x.l.confidence} confidence`),
+          editable && rows.length > 1 && h("button", { class: "link", type: "button", onclick: () => { rows.splice(i, 1); dirty = true; draw(); } }, "Remove line"))),
+        editable && h("button", { class: "link", type: "button", onclick: () => { rows.push({ line_id: null, sku: null, cases: 1, l: {} }); dirty = true; draw(); } }, "+ Add item")),
+      editable && h("label", { class: "field" }, h("span", { text: "Desk note (shown in the Tally narration)" }), h("input", { maxlength: 300, value: note, oninput: (e) => { note = e.target.value; dirty = true; } })),
+      dirty && h("p", { class: "hint", text: "You have unsaved changes. Save before confirming." }),
+      h("div", { class: "actions" }, editable && saveBtn, o.status === "on_hold" && releaseBtn, o.status === "placed" && confirmBtn, editable && cancelBtn));
+    saveBtn.disabled = busy || !dirty || !valid; releaseBtn.disabled = busy || dirty; confirmBtn.disabled = busy || dirty; cancelBtn.disabled = busy;
+  };
+  const saveBtn = h("button", { class: "btn", type: "button", onclick: () => act(async () => { await api(`/api/desk/orders/${id}/lines`, { method: "PUT", body: { note, lines: rows.map((x) => ({ line_id: x.line_id, sku_code: x.sku, cases: x.cases })) } }); return true; }) }, "Save changes");
+  const releaseBtn = h("button", { class: "btn secondary", type: "button", onclick: () => act(async () => { await api(`/api/desk/orders/${id}/release`, { method: "POST", body: { note } }); return true; }) }, "Release credit hold");
+  const confirmBtn = h("button", { class: "btn", type: "button", onclick: () => act(async () => { await api(`/api/desk/orders/${id}/confirm`, { method: "POST" }); return true; }) }, "Confirm order");
+  const cancelBtn = h("button", { class: "btn danger", type: "button", onclick: () => { if (confirm("Cancel this order?")) act(async () => { await api(`/api/desk/orders/${id}/cancel`, { method: "POST", body: { note } }); return true; }); } }, "Cancel order");
+  draw();
+}
+
 // ---------- routing ----------
 function route() {
   const r = location.hash || "#/catalogue";
   if (!state.me) return r === "#/login" ? viewLogin() : go("#/login");
-  if (state.me.role === "desk") return render(h("p", { class: "msg info", text: t("deskSoon") }));
+  if (state.me.role === "desk") {
+    const m = r.match(/^#\/desk\/order\/(\d+)$/);
+    if (m) return viewDeskOrder(Number(m[1]));
+    if (r !== "#/desk") return go("#/desk");
+    return viewDeskQueue();
+  }
   if (r === "#/cart") return viewCart();
   if (r === "#/done") return viewDone();
   if (r === "#/message") return viewCapture();
@@ -311,7 +398,7 @@ function route() {
 }
 async function boot() {
   try { state.me = await api("/api/me"); } catch { state.me = null; }
-  if (state.me && (!location.hash || location.hash === "#/login")) location.hash = "#/catalogue";
+  if (state.me && (!location.hash || location.hash === "#/login")) location.hash = state.me.role === "desk" ? "#/desk" : "#/catalogue";
   route();
 }
 state.lang = store.get("lang") === "hi" ? "hi" : "en"; document.documentElement.lang = state.lang;

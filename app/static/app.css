@@ -100,3 +100,27 @@ select,.qty{min-height:var(--tap);width:100%;padding:0 12px;border:1px solid var
 .st{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px}
 .st.placed,.st.confirmed,.st.exported{background:var(--brand-soft);color:var(--brand)} .st.on_hold{background:var(--warn-soft);color:var(--warn)} .st.cancelled{background:var(--bad-soft);color:var(--bad)}
 .oline{font-size:14px;color:var(--muted)}
+
+.wrap.wide{max-width:980px}
+.qlist{display:grid;gap:10px}
+.qrow-card{display:grid;grid-template-columns:70px 1fr auto;gap:6px 14px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 16px;text-decoration:none;color:inherit;min-height:var(--tap)}
+.qrow-card:hover{border-color:var(--brand)}
+.qrow-card:focus-visible{outline:3px solid #8cc7a8}
+.qrow-card .meta{font-size:13px;color:var(--muted)}
+.qrow-card .amt{font-weight:700;text-align:right}
+.ai{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:1px 6px;background:#eee;color:var(--muted);margin-left:6px}
+.dhead{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center;margin:16px 0}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin:12px 0}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kv b{display:block;font-size:12px;color:var(--muted);font-weight:600}
+.dline{display:grid;grid-template-columns:1fr 90px 110px;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.dline:first-of-type{border-top:0}
+.dline .src{grid-column:1/-1;font-size:13px;color:var(--muted)}
+.dline .amt{text-align:right;font-weight:600}
+@media(max-width:560px){.dline{grid-template-columns:1fr 80px}.dline .amt{text-align:left}.qrow-card{grid-template-columns:60px 1fr}.qrow-card .amt{text-align:left;grid-column:1/-1}}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}
+.actions .btn{width:auto;min-width:150px}
+.btn.danger{background:transparent;border-color:var(--bad);color:var(--bad)}
+.back{display:inline-block;margin:12px 0;color:var(--brand);font-weight:600;text-decoration:none;min-height:var(--tap);line-height:var(--tap)}
+.dline .link{grid-column:1/-1;justify-self:start;min-height:36px;padding:0}
+header.top.wide .wrap{max-width:980px}

@@ -385,6 +385,12 @@ def desk_queue(status: str | None = None, _: User = Depends(desk_only), db: Sess
              "created_at": o.created_at.isoformat(), "line_count": len(o.lines)} for o in rows]
 
 
+@app.get("/api/desk/skus")
+def desk_skus(_: User = Depends(desk_only), db: Session = Depends(get_db)):
+    return [{"code": k.code, "name": k.name, "stock_cases": k.stock_cases}
+            for k in db.scalars(select(Sku).order_by(Sku.category, Sku.name))]
+
+
 @app.get("/api/desk/orders/{order_id}")
 def desk_order(order_id: int, _: User = Depends(desk_only), db: Session = Depends(get_db)):
     return _desk_order_json(_desk_order(db, order_id), db)

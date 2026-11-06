@@ -100,3 +100,11 @@ def test_tally_export_csv_and_marks_exported(client):
     assert mine and mine[0]["Item Code"] == "SKU-DT-1KG" and mine[0]["Qty (cases)"] == "5"
     assert float(mine[0]["Discount"]) > 0  # 3% slab at 5 cases
     assert client.get(f"/api/desk/orders/{o['id']}").json()["status"] == "exported"
+
+
+def test_desk_sku_list_is_desk_only(client):
+    login(client, SHARMA)
+    assert client.get("/api/desk/skus").status_code == 403
+    client.post("/api/auth/logout")
+    login(client, DESK)
+    assert len(client.get("/api/desk/skus").json()) == 8
