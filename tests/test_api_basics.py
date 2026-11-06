@@ -69,3 +69,12 @@ def test_unregistered_number_gets_helpful_message_in_demo_mode_only(client, monk
     monkeypatch.setattr("app.main.DEMO_MODE", False)
     r = client.post("/api/auth/login", json={"phone": "9876543210", "otp": "123456"})
     assert "quick-login" not in r.json()["detail"]
+
+
+def test_catalogue_has_hindi_names_and_structured_scheme_rules(client):
+    login(client, SHARMA)
+    items = {i["code"]: i for i in client.get("/api/catalogue").json()["items"]}
+    assert all(i["name_hi"] for i in items.values())
+    rule = items["SKU-BS-075"]["scheme_rules"][0]
+    assert rule == {"type": "free_goods", "buy_qty": 10, "free_qty": 1, "min_cases": 0, "discount_pct": 0.0}
+    assert items["SKU-DT-1KG"]["scheme_rules"][0]["discount_pct"] == 3.0

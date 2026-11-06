@@ -127,18 +127,22 @@ def _scheme_text(s: Scheme) -> str:
 @app.get("/api/catalogue")
 def catalogue(retailer: Retailer = Depends(auth.current_retailer), db: Session = Depends(get_db)):
     schemes: dict[str, list[str]] = {}
+    rules: dict[str, list[dict]] = {}
     for sc in db.scalars(select(Scheme)):
         schemes.setdefault(sc.sku_code, []).append(_scheme_text(sc))
+        # Structured form so the browser can word the offer in the shopkeeper's language.
+        rules.setdefault(sc.sku_code, []).append({"type": sc.type, "buy_qty": sc.buy_qty, "free_qty": sc.free_qty,
+                                                  "min_cases": sc.min_cases, "discount_pct": sc.discount_bp / 100})
     items = []
     for s in db.scalars(select(Sku).order_by(Sku.category, Sku.name)):
         case_price = adjust_price(s.case_price_paise, retailer.price_discount_bp)
         stock = "out" if s.stock_cases <= 0 else "low" if s.stock_cases < 50 else "in"
         items.append({
-            "code": s.code, "name": s.name, "category": s.category, "color": s.color,
+            "code": s.code, "name": s.name, "name_hi": s.name_hi, "category": s.category, "color": s.color,
             "pieces_per_case": s.pieces_per_case,
             "piece_price_paise": adjust_price(s.piece_price_paise, retailer.price_discount_bp),
             "case_price_paise": case_price, "stock_status": stock,
-            "schemes": schemes.get(s.code, []),
+            "schemes": schemes.get(s.code, []), "scheme_rules": rules.get(s.code, []),
         })
     return {"gst_note": "Prices exclude GST", "items": items}
 

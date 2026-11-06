@@ -5,6 +5,12 @@ const state = { me: null, cat: null, cart: {}, lang: "en", filter: "all", offlin
 
 // ---------- helpers ----------
 const t = (k) => (I18N[state.lang] && I18N[state.lang][k]) || I18N.en[k] || k;
+const fmt = (tpl, vars) => tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k]);
+const itemOf = (code) => state.cat?.items.find((x) => x.code === code);
+const itemName = (code, fallback) => { const i = itemOf(code); return state.lang === "hi" && i?.name_hi ? i.name_hi : i?.name || fallback || code; };
+const catLabel = (c) => t("cat_" + c) === "cat_" + c ? c : t("cat_" + c);
+const ruleText = (r) => r.type === "free_goods" ? fmt(t("schemeFree"), { buy: r.buy_qty, free: r.free_qty }) : fmt(t("schemeSlab"), { pct: r.discount_pct, min: r.min_cases });
+const ensureCat = async () => { if (!state.cat) { try { state.cat = await api("/api/catalogue"); } catch (e) { /* offline or logged out: callers fall back to server names */ } } };
 const rupees = (p) => "₹" + (p / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -137,15 +143,15 @@ async function viewCatalogue() {
     render(
       state.offline && h("p", { class: "msg warn", text: t("offline") }),
       h("div", { class: "chips", role: "group" }, cats.map((c) => h("button", { class: "chip", type: "button", "aria-pressed": String(state.filter === c),
-        onclick: () => { state.filter = c; draw(); } }, c === "all" ? t("all") : c))),
+        onclick: () => { state.filter = c; draw(); } }, c === "all" ? t("all") : catLabel(c)))),
       h("p", { class: "gst", text: t("exclGst") }),
       h("div", { class: "grid" }, items.filter((i) => state.filter === "all" || i.category === state.filter).map((i) =>
         h("article", { class: "card" },
           h("div", { class: "pic", style: `background:${i.color}` }, packIcon(i.category), i.schemes[0] && h("span", { class: "badge", text: t("offer") })),
-          h("div", { class: "body" }, h("h3", { text: i.name }),
+          h("div", { class: "body" }, h("h3", { text: itemName(i.code) }),
             h("div", { class: "price" }, rupees(i.case_price_paise), " ", h("small", { text: t("perCase") })),
             h("div", { class: "sub2", text: `${rupees(i.piece_price_paise)} ${t("perPiece")} · ${t("exGst")}` }),
-            h("div", { class: "schemes" }, i.schemes.map((s) => h("span", { class: "scheme", text: s }))),
+            h("div", { class: "schemes" }, i.scheme_rules.map((r) => h("span", { class: "scheme", text: ruleText(r) }))),
             h("div", { class: `stock ${i.stock_status}`, text: stockLabel(i.stock_status) }),
             i.stock_status === "out" ? h("button", { class: "btn secondary", type: "button", disabled: true }, t("outStock")) : stepper(i.code, updateBar))))),
       bar);
@@ -166,6 +172,7 @@ async function viewCart() {
   const codes = Object.keys(state.cart);
   if (!codes.length) return render(h("div", { class: "empty" }, h("h2", { text: t("emptyCart") }), h("button", { class: "btn sm", type: "button", onclick: () => go("#/catalogue") }, t("browse"))));
   render(skeleton());
+  await ensureCat();
   let priced;
   try { priced = await api("/api/cart/price", { method: "POST", body: { lines: codes.map((c) => ({ sku_code: c, cases: state.cart[c] })) } }); }
   catch (e) { if (e.message === "auth") return; return render(errorBox(e.offline ? t("offlineCart") : e.message, viewCart)); }
@@ -184,10 +191,10 @@ async function viewCart() {
   const placeBtn = h("button", { class: "btn", type: "button", disabled: !priced.placeable, onclick: (e) => place(e.currentTarget) }, t("placeOrder"));
   render(
     priced.lines.map((l) => h("div", { class: "line" },
-      h("div", { class: "row" }, h("span", { class: "name", text: l.name }), h("button", { class: "link", type: "button", onclick: () => { setQty(l.sku_code, 0); refresh(); } }, t("remove"))),
+      h("div", { class: "row" }, h("span", { class: "name", text: itemName(l.sku_code, l.name) }), h("button", { class: "link", type: "button", onclick: () => { setQty(l.sku_code, 0); refresh(); } }, t("remove"))),
       h("div", { class: "row" }, stepper(l.sku_code, refresh), h("strong", { text: rupees(l.net_paise) })),
       l.free_cases > 0 && h("div", { class: "note", text: `+ ${l.free_cases} ${t("cases")} ${t("free")}` }),
-      l.notes.filter((n) => !/free/.test(n)).map((n) => h("div", { class: "note", text: n })),
+      (itemOf(l.sku_code)?.scheme_rules || []).filter((r) => r.type === "slab" && l.cases >= r.min_cases).map((r) => h("div", { class: "note", text: ruleText(r) })),
       l.issues.map((i) => h("div", { class: "msg err", role: "alert" }, i.message, " ",
         i.max_orderable > 0 && h("button", { class: "link", type: "button", onclick: () => { setQty(l.sku_code, i.max_orderable); refresh(); } }, `${t("reduceTo")} ${i.max_orderable}`))))),
     h("div", { class: "totals" },
@@ -254,14 +261,14 @@ function viewReview(d) {
     render(h("h2", { class: "title", text: t("review") }),
       rows.map((r) => {
         const sel = h("select", { "aria-label": t("chooseItem"), onchange: (e) => { r.sku = e.target.value || null; draw(); } },
-          h("option", { value: "" }, t("chooseItem")), items.map((i) => h("option", { value: i.code, selected: i.code === r.sku }, i.name)));
+          h("option", { value: "" }, t("chooseItem")), items.map((i) => h("option", { value: i.code, selected: i.code === r.sku }, itemName(i.code))));
         const alts = r.alts.filter((a) => a.code !== r.sku);
         return h("div", { class: `rev${ok(r) ? "" : " bad"}` },
           h("div", { class: "quote" }, h("small", { text: t("youWrote") }), `“${r.orig}”`),
           h("span", { class: `conf ${r.conf || "low"}`, text: r.conf === "high" ? t("confHigh") : r.conf === "medium" ? t("confMed") : t("confLow") }),
           r.note && h("div", { class: "sub2", text: r.note }),
           sel,
-          alts.length > 0 && h("div", { class: "alts" }, t("orPick") + ":", alts.map((a) => h("button", { class: "chip", type: "button", onclick: () => { r.sku = a.code; draw(); } }, a.name))),
+          alts.length > 0 && h("div", { class: "alts" }, t("orPick") + ":", alts.map((a) => h("button", { class: "chip", type: "button", onclick: () => { r.sku = a.code; draw(); } }, itemName(a.code, a.name)))),
           out(r) && h("p", { class: "msg err", role: "alert", text: t("offStock") }),
           r.unitQ && !r.unit && h("p", { class: "msg warn", role: "alert", text: t("unitAsk") }),
           h("div", { class: "qrow" },
@@ -281,6 +288,7 @@ function viewReview(d) {
 // ---------- order history + repeat ----------
 async function viewOrders() {
   render(skeleton());
+  await ensureCat();
   let list;
   try { list = await api("/api/orders"); } catch (e) { if (e.message === "auth") return; return render(errorBox(e.offline ? t("offlineCart") : e.message, viewOrders)); }
   if (!list.length) return render(h("div", { class: "empty" }, h("h2", { text: t("noOrders") }), h("p", { text: t("noOrdersHint" ) }), h("button", { class: "btn sm", type: "button", onclick: () => go("#/catalogue") }, t("browse"))));
@@ -288,7 +296,7 @@ async function viewOrders() {
   render(h("h2", { class: "title", text: t("orders") }), list.map((o) => h("div", { class: "line" },
     h("div", { class: "row" }, h("strong", { text: `#${o.id}` }), h("span", { class: `st ${o.status}`, text: label[o.status] || o.status })),
     h("div", { class: "sub2", text: new Date(o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) }),
-    o.lines.map((l) => h("div", { class: "oline", text: `${l.name}: ${l.cases}${l.free_cases ? ` + ${l.free_cases} ${t("free")}` : ""} ${t("cases")}` })),
+    o.lines.map((l) => h("div", { class: "oline", text: `${itemName(l.sku_code, l.name)}: ${l.cases}${l.free_cases ? ` + ${l.free_cases} ${t("free")}` : ""} ${t("cases")}` })),
     h("div", { class: "row" }, h("strong", { text: rupees(o.total_paise) }),
       h("button", { class: "btn sm secondary", type: "button", onclick: async (e) => {
         e.currentTarget.disabled = true;

@@ -36,6 +36,7 @@ class Sku(Base):
     __tablename__ = "skus"
     code: Mapped[str] = mapped_column(String(24), primary_key=True)
     name: Mapped[str] = mapped_column(String(120))
+    name_hi: Mapped[str] = mapped_column(String(160), default="")  # Hindi display name
     category: Mapped[str] = mapped_column(String(40))
     pieces_per_case: Mapped[int] = mapped_column(Integer)
     piece_price_paise: Mapped[int] = mapped_column(Integer)  # dealer price per piece, ex-GST

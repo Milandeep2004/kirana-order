@@ -20,6 +20,8 @@ window.I18N = {
     confirmOrder: "Confirm order", fixLines: "Complete every line to continue.", startOver: "Start over", qty: "Quantity",
     offStock: "Out of stock. Please choose another item.", stPlaced: "Order received", stHold: "Awaiting approval", stConfirmed: "Confirmed", stCancelled: "Cancelled",
     repeat: "Repeat order", noOrders: "No orders yet", noOrdersHint: "Your orders will appear here.",
+    schemeFree: "Buy {buy} cases, get {free} free", schemeSlab: "{pct}% off on {min}+ cases",
+    cat_Biscuits: "Biscuits", "cat_Home care": "Home care", cat_Tea: "Tea",
     youSave: "Scheme savings", lineTotal: "Line total", language: "हिंदी"
   },
   hi: {
@@ -42,6 +44,8 @@ window.I18N = {
     confirmOrder: "ऑर्डर पक्का करें", fixLines: "आगे बढ़ने के लिए हर लाइन भरें।", startOver: "फिर से शुरू करें", qty: "मात्रा",
     offStock: "स्टॉक खत्म। कृपया कोई और सामान चुनें।", stPlaced: "ऑर्डर मिला", stHold: "मंज़ूरी का इंतज़ार", stConfirmed: "पक्का", stCancelled: "रद्द",
     repeat: "फिर से ऑर्डर करें", noOrders: "अभी कोई ऑर्डर नहीं", noOrdersHint: "आपके ऑर्डर यहाँ दिखेंगे।",
+    schemeFree: "{buy} पेटी लें, {free} मुफ़्त पाएँ", schemeSlab: "{min}+ पेटी पर {pct}% छूट",
+    cat_Biscuits: "बिस्कुट", "cat_Home care": "घरेलू सामान", cat_Tea: "चाय",
     youSave: "स्कीम बचत", lineTotal: "लाइन कुल", language: "English"
   }
 };

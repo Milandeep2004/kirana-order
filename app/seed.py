@@ -8,6 +8,17 @@ from sqlalchemy.orm import Session
 from .models import Alias, Order, OrderLine, Retailer, Scheme, Sku, User, now
 from .pricing import CartLine, SchemeInfo, SkuInfo, adjust_price, price_cart
 
+NAME_HI = {
+    'SKU-BS-075': 'ग्लूकोज़ बिस्कुट 75 ग्राम, 96 की पेटी',
+    'SKU-DT-1KG': 'डिटर्जेंट पाउडर 1 किग्रा, 20 की पेटी',
+    'SKU-TE-250': 'चाय पत्ती 250 ग्राम, 40 की पेटी',
+    'SKU-BS-200': 'ग्लूकोज़ बिस्कुट 200 ग्राम, 36 की पेटी',
+    'SKU-DT-500': 'डिटर्जेंट पाउडर 500 ग्राम, 40 की पेटी',
+    'SKU-TE-100': 'चाय पत्ती 100 ग्राम, 100 की पेटी',
+    'SKU-SP-100': 'नहाने का साबुन 100 ग्राम, 72 की पेटी',
+    'SKU-DW-500': 'बर्तन धोने का लिक्विड 500 मिली, 24 की पेटी',
+}
+
 # code, name, category, pieces/case, piece price (paise), stock, keywords, colour
 SKUS = [
     # --- from the brief ---
@@ -76,7 +87,7 @@ def seed(db: Session) -> bool:
     if db.scalar(select(User.id).limit(1)):
         return False
     for code, name, cat, ppc, pp, stock, kw, color in SKUS:
-        db.add(Sku(code=code, name=name, category=cat, pieces_per_case=ppc, piece_price_paise=pp,
+        db.add(Sku(code=code, name=name, name_hi=NAME_HI.get(code, ""), category=cat, pieces_per_case=ppc, piece_price_paise=pp,
                    stock_cases=stock, keywords=kw, color=color))
     for sku, typ, buy, free, mn, bp in SCHEMES:
         db.add(Scheme(sku_code=sku, type=typ, buy_qty=buy, free_qty=free, min_cases=mn, discount_bp=bp))

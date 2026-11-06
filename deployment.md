@@ -18,7 +18,7 @@ uvicorn app.main:app --reload
 ```
 
 Open http://localhost:8000. The database (SQLite, `kirana.db`) is created and filled with
-sample data on first start. Delete `kirana.db` to reset to the seed data.
+sample data on first start. Delete `kirana.db` to reset to the seed data. Do this after pulling updates that change the data model (for example, new columns): the app creates tables only when they do not exist yet.
 
 Run the tests: `python -m pytest -q`
 
