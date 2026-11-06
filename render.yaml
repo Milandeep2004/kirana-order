@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: kirana-order
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:///./kirana.db
+      - key: DEMO_MODE
+        value: "1"
+      - key: DEMO_OTP
+        value: "123456"
+      - key: COOKIE_SECURE
+        value: "1"

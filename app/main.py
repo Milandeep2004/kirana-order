@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import auth
+from .config import COOKIE_SECURE
 from .db import Base, SessionLocal, engine, get_db
 from .models import Retailer, Scheme, Sku, User
 from .pricing import CartLine, adjust_price, price_cart
@@ -91,7 +92,7 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
         auth.record_failure(body.phone)
         raise HTTPException(401, "Wrong phone number or code.")
     response.set_cookie(auth.COOKIE, auth.make_session(user.id), max_age=auth.SESSION_SECONDS,
-                        httponly=True, samesite="lax")
+                        httponly=True, samesite="lax", secure=COOKIE_SECURE)
     return {"role": user.role, "name": user.name}
 
 

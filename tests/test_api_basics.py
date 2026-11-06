@@ -51,3 +51,10 @@ def test_cart_price_applies_schemes_and_blocks_out_of_stock(client):
 def test_cart_price_validates_input(client):
     login(client, SHARMA)
     assert client.post("/api/cart/price", json={"lines": [{"sku_code": "SKU-BS-075", "cases": 0}]}).status_code == 422
+
+
+def test_session_cookie_is_secure_when_configured(client, monkeypatch):
+    monkeypatch.setattr("app.main.COOKIE_SECURE", True)
+    r = client.post("/api/auth/login", json={"phone": SHARMA, "otp": "123456"})
+    cookie = r.headers["set-cookie"].lower()
+    assert "httponly" in cookie and "secure" in cookie and "samesite=lax" in cookie
