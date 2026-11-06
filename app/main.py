@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import auth
-from .config import COOKIE_SECURE
+from .config import COOKIE_SECURE, DEMO_MODE, DEMO_OTP
 from .db import Base, SessionLocal, engine, get_db
 from .models import Retailer, Scheme, Sku, User
 from .pricing import CartLine, adjust_price, price_cart
@@ -88,6 +88,9 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
     if auth.too_many_failures(body.phone):
         raise HTTPException(429, "Too many wrong codes. Try again in a few minutes.")
     user = db.scalar(select(User).where(User.phone == body.phone))
+    if not user and DEMO_MODE and body.otp == DEMO_OTP:
+        # Demo only (fake data): be helpful instead of cryptic. Outside demo mode the message stays generic.
+        raise HTTPException(401, "This number is not registered. In the demo, use one of the quick-login buttons below.")
     if not user or not auth.check_otp(body.phone, body.otp):
         auth.record_failure(body.phone)
         raise HTTPException(401, "Wrong phone number or code.")

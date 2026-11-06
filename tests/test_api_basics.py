@@ -58,3 +58,14 @@ def test_session_cookie_is_secure_when_configured(client, monkeypatch):
     r = client.post("/api/auth/login", json={"phone": SHARMA, "otp": "123456"})
     cookie = r.headers["set-cookie"].lower()
     assert "httponly" in cookie and "secure" in cookie and "samesite=lax" in cookie
+
+
+def test_unregistered_number_gets_helpful_message_in_demo_mode_only(client, monkeypatch):
+    r = client.post("/api/auth/login", json={"phone": "9876543210", "otp": "123456"})
+    assert r.status_code == 401 and "quick-login" in r.json()["detail"]
+    # a wrong code for an unknown number stays generic
+    r = client.post("/api/auth/login", json={"phone": "9876543210", "otp": "000000"})
+    assert r.status_code == 401 and "quick-login" not in r.json()["detail"]
+    monkeypatch.setattr("app.main.DEMO_MODE", False)
+    r = client.post("/api/auth/login", json={"phone": "9876543210", "otp": "123456"})
+    assert "quick-login" not in r.json()["detail"]
