@@ -30,8 +30,15 @@ header.top .wrap{display:flex;align-items:center;gap:12px;padding:10px 16px;min-
 .login{padding-top:48px}
 .login h1{font-size:26px;margin:0 0 4px}
 .login p.sub{color:var(--muted);margin:0 0 20px}
-.demo{margin-top:28px;padding-top:16px;border-top:1px dashed var(--line);font-size:14px;color:var(--muted)}
-.demo .btn{margin-top:8px;justify-content:flex-start;font-weight:500}
+.demo{margin:0 0 8px}
+.demo h2{font-size:16px;margin:0 0 2px}
+.demo .hint{font-size:14px;color:var(--muted);margin:0 0 10px}
+.acct{display:block;width:100%;text-align:left;min-height:56px;padding:10px 14px;margin:0 0 8px;border:1px solid var(--line);border-radius:12px;background:#fff;font:inherit;cursor:pointer}
+.acct strong{display:block;font-size:16px}
+.acct span{display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.acct:active{background:#f4f4f2}
+.own{margin-top:20px;padding-top:14px;border-top:1px dashed var(--line)}
+.own .or{font-size:14px;color:var(--muted);margin:0 0 8px}
 .chips{display:flex;gap:8px;overflow-x:auto;padding:12px 0;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex:none;min-height:40px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);cursor:pointer}

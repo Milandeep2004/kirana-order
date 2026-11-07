@@ -1,5 +1,5 @@
 // Level-1 offline: the app shell opens without signal, and the last catalogue is shown as an estimate.
-const SHELL = "kirana-shell-v2";
+const SHELL = "kirana-shell-v3";
 const API = "kirana-api-v2";
 const FILES = ["/", "/static/app.css", "/static/app.js", "/static/i18n.js", "/static/icon.svg", "/static/manifest.webmanifest"];
 

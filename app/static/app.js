@@ -97,16 +97,17 @@ async function viewLogin() {
       draw();
     } },
       step === "phone"
-        ? h("label", { class: "field" }, h("span", { text: t("phone") }), h("input", { name: "phone", inputmode: "numeric", autocomplete: "tel", maxlength: 10, value: phone, required: true, autofocus: true }))
-        : h("label", { class: "field" }, h("span", { text: `${t("code")} (${phone})` }), h("input", { name: "otp", inputmode: "numeric", autocomplete: "one-time-code", maxlength: 8, required: true, autofocus: true })),
+        ? h("label", { class: "field" }, h("span", { text: t("phone") }), h("input", { name: "phone", inputmode: "numeric", autocomplete: "tel", maxlength: 10, value: phone, required: true, autofocus: !cfg.demo_mode }))
+        : h("label", { class: "field" }, h("span", { text: `${t("code")} (${phone})` }), h("input", { name: "otp", inputmode: "numeric", autocomplete: "one-time-code", maxlength: 8, required: true, autofocus: true, value: cfg.demo_mode ? cfg.demo_otp : "" })),
       error && h("p", { class: "msg err", role: "alert", text: error }),
       h("button", { class: "btn", type: "submit" }, step === "phone" ? t("sendCode") : t("verify")));
-    const demo = cfg.demo_mode && h("div", { class: "demo" }, h("p", { text: `${t("demoHint")} ${t("demoCode")}: ${cfg.demo_otp}` }),
-      cfg.demo_users.map((u) => h("button", { class: "btn secondary", type: "button", onclick: async () => {
+    const demo = cfg.demo_mode && h("section", { class: "demo" }, h("h2", { text: t("demoTitle") }), h("p", { class: "hint", text: t("demoHint") }),
+      cfg.demo_users.map((u) => h("button", { class: "acct", type: "button", onclick: async () => {
         try { await api("/api/auth/login", { method: "POST", body: { phone: u.phone, otp: cfg.demo_otp } }); await boot(); }
         catch (err) { error = err.message; draw(); }
-      } }, u.label)));
-    $app.replaceChildren(header(), h("main", { class: "wrap login" }, h("h1", { text: t("login") }), h("p", { class: "sub", text: t("appName") }), form, demo));
+      } }, h("strong", { text: u.label }), h("span", { text: u.note }))));
+    const own = h("div", { class: "own" }, cfg.demo_mode && h("p", { class: "or", text: t("orOwn") }), form);
+    $app.replaceChildren(header(), h("main", { class: "wrap login" }, h("h1", { text: t("login") }), h("p", { class: "sub", text: t("appName") }), demo, own));
   };
   draw();
 }

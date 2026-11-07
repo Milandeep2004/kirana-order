@@ -57,9 +57,10 @@ def public_config():
     out = {"demo_mode": DEMO_MODE}
     if DEMO_MODE:
         out["demo_otp"] = DEMO_OTP
-        out["demo_users"] = [{"phone": "9000000001", "label": "Retailer: Sharma General Store"},
-                             {"phone": "9000000002", "label": "Retailer: Gupta Kirana (tight credit)"},
-                             {"phone": "9000000100", "label": "Order desk"}]
+        out["demo_users"] = [
+            {"phone": "9000000001", "label": "Sharma General Store", "role": "retailer", "note": "Retailer. Normal prices, learned wording"},
+            {"phone": "9000000002", "label": "Gupta Kirana", "role": "retailer", "note": "Retailer. Tight credit, big orders go on hold"},
+            {"phone": "9000000100", "label": "Order desk", "role": "desk", "note": "Office. Check, edit, confirm, export to Tally"}]
     return out
 
 
