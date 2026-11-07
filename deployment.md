@@ -47,20 +47,26 @@ Render reads `render.yaml`, builds, and gives a public https URL.
 
 ## 3. Demo logins (for the reviewer)
 
-Open the app and use the quick-login buttons on the login screen, or enter a phone number and
-the demo code shown there (`123456`).
+Open the app and tap an account card on the login screen; no code is needed. You can also type
+a registered number below the cards. The demo code `123456` is prefilled.
 
 | Role | Phone | Notes |
 |---|---|---|
 | Retailer | 9000000001 | Sharma General Store. Knows its own wording ("biscuit chhota"), so the AI is surer for this shop. |
 | Retailer | 9000000002 | Gupta Kirana. Tight credit limit: a larger order goes on hold for the desk. |
 | Retailer | 9000000003 | Verma Super Mart. Best price tier. |
-| Order desk | 9000000100 | Queue, edit, release holds, confirm, Tally export. |
+| Order desk | 9000000100 | Queue, edit, release holds, confirm, Tally export, van loading list, shops with no order in 14 days. |
+
+Two more seeded shops (9000000004 Agrawal Provision, 9000000005 Tiwari Stores) have no recent
+order, so they appear in the desk's "Not ordering" tab. Their invented data is listed as an
+assumption in the TDD.
 
 Suggested walk-through: log in as Sharma, open "By message", paste
 `bhaiya 5 peti biscuit chhota, 2 peti washing powder 1 kilo, chai patti 250 wala 1 peti`.
 Tea is out of stock, so swap it to continue. Place the order, then log in as the desk to confirm
-it and export the Tally CSV.
+it and export the Tally CSV. Then open the "Van list" tab to see the confirmed cases to load
+(free cases included). Try `3 peti biscuit` as Sharma: his order history makes the AI suggest the
+75 g pack with "ordered this 2 times before. Please check."
 
 ## 4. Known limits of this deployment
 
