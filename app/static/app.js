@@ -119,7 +119,7 @@ function packIcon(item) {
   const w = (name.match(/(\d+(?:\.\d+)?)\s?(kg|g|ml)\b/i) || []).slice(1, 3).join("");
   const S = { fill: "#fff", "fill-opacity": ".92", stroke: "#1c1c1a", "stroke-opacity": ".28", "stroke-width": "2", "stroke-linejoin": "round" };
   const G = { fill: "#1f6f4a", "fill-opacity": ".9" };
-  const s = svg("svg", { viewBox: "0 0 80 80", "aria-hidden": "true" });
+  const s = svg("svg", { viewBox: "0 0 80 88", "aria-hidden": "true" });
   const add = (tag, attrs) => s.append(svg(tag, attrs));
   if (code.startsWith("SKU-BS")) {            // biscuit pillow pack with crimped ends
     add("path", { d: "M14 18h52l-3 6 3 6-3 6 3 6-3 6 3 6H14l3-6-3-6 3-6-3-6 3-6z", ...S });
@@ -137,7 +137,7 @@ function packIcon(item) {
   } else {                                     // soap carton
     add("rect", { x: "12", y: "26", width: "56", height: "34", rx: "8", ...S }); add("rect", { x: "22", y: "36", width: "36", height: "14", rx: "6", ...G });
   }
-  if (w) { const t2 = svg("text", { x: "40", y: "77", "text-anchor": "middle", "font-size": "11", "font-weight": "700", fill: "#1c1c1a", "fill-opacity": ".55", "font-family": "system-ui,sans-serif" }); t2.textContent = w; s.append(t2); }
+  if (w) { const t2 = svg("text", { x: "40", y: "85", "text-anchor": "middle", "font-size": "11", "font-weight": "700", fill: "#1c1c1a", "fill-opacity": ".55", "font-family": "system-ui,sans-serif" }); t2.textContent = w; s.append(t2); }
   return s;
 }
 const stockLabel = (s) => (s === "out" ? t("outStock") : s === "low" ? t("lowStock") : t("inStock"));
@@ -344,8 +344,8 @@ async function exportTally(setMsg) {
 
 function deskTabs() {
   const cur = state.deskTab || "orders";
-  return h("div", { class: "tabs", role: "tablist" }, [["orders", "Orders"], ["van", "Van list"], ["inactive", "Not ordering"]].map(([v, label]) =>
-    h("button", { class: "tab", type: "button", role: "tab", "aria-selected": String(cur === v), onclick: () => { state.deskTab = v; viewDeskQueue(); } }, label)));
+  return h("div", { class: "dtabs", role: "tablist" }, [["orders", "Orders"], ["van", "Van list"], ["inactive", "Not ordering"]].map(([v, label]) =>
+    h("button", { class: "dtab", type: "button", role: "tab", "aria-selected": String(cur === v), onclick: () => { state.deskTab = v; viewDeskQueue(); } }, label)));
 }
 
 async function viewVanList() {
