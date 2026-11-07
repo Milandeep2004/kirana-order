@@ -1,6 +1,6 @@
 # Deployment guide: Kirana Order
 
-Live app: _TO BE FILLED after deploying_ (Render free tier)
+Live app: https://kirana-order.onrender.com (Render free tier; open it once and wait up to a minute if it has been idle)
 Repository: https://github.com/Milandeep2004/kirana-order
 
 ## 1. Run locally
