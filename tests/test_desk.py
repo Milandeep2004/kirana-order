@@ -108,3 +108,41 @@ def test_desk_sku_list_is_desk_only(client):
     client.post("/api/auth/logout")
     login(client, DESK)
     assert len(client.get("/api/desk/skus").json()) == 8
+
+
+def test_van_list_sums_confirmed_orders_with_free_cases_per_sku(client):
+    a = retailer_places(client, SHARMA, [{"sku_code": "SKU-BS-075", "cases": 10}])  # 10 + 1 free
+    b = retailer_places(client, SHARMA, [{"sku_code": "SKU-BS-075", "cases": 5}])
+    retailer_places(client, SHARMA, [{"sku_code": "SKU-BS-075", "cases": 7}])  # stays "placed": must not be loaded
+    login(client, DESK)
+    before = client.get("/api/desk/van-list").json()  # seed has one confirmed order (Gupta, detergent)
+    assert "SKU-BS-075" not in {r["sku_code"] for r in before["rows"]}
+    for o in (a, b):
+        assert client.post(f"/api/desk/orders/{o['id']}/confirm").status_code == 200
+    v = client.get("/api/desk/van-list").json()
+    row = next(r for r in v["rows"] if r["sku_code"] == "SKU-BS-075")
+    assert v["order_count"] == before["order_count"] + 2 and row["cases"] == 15 and row["free_cases"] == 1 and row["total_cases"] == 16
+    assert row["shops"] == [{"shop_name": "Sharma General Store", "cases": 16}]
+
+
+def test_van_list_is_desk_only(client):
+    login(client, SHARMA)
+    assert client.get("/api/desk/van-list").status_code == 403
+    assert client.get("/api/desk/inactive").status_code == 403
+
+
+def test_inactive_lists_shops_with_no_order_in_14_days_or_never(client):
+    login(client, DESK)
+    shops = {s["shop_name"]: s for s in client.get("/api/desk/inactive").json()["shops"]}
+    assert "Agrawal Provision" in shops and shops["Agrawal Provision"]["days_since"] >= 21
+    assert "Tiwari Stores" in shops and shops["Tiwari Stores"]["last_order_at"] is None
+    assert "Gupta Kirana" not in shops and "Sharma General Store" not in shops
+    # a wider window drops the 22-day-old shop but never the one that never ordered
+    wide = {s["shop_name"] for s in client.get("/api/desk/inactive?days=30").json()["shops"]}
+    assert "Agrawal Provision" not in wide and "Tiwari Stores" in wide
+
+
+def test_a_new_order_removes_a_shop_from_inactive(client):
+    retailer_places(client, "9000000005", [{"sku_code": "SKU-BS-075", "cases": 1}])
+    login(client, DESK)
+    assert "Tiwari Stores" not in {s["shop_name"] for s in client.get("/api/desk/inactive").json()["shops"]}

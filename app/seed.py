@@ -55,6 +55,8 @@ USERS = [
     ("9000000001", "retailer", "Mahesh Sharma"),
     ("9000000002", "retailer", "Pooja Gupta"),
     ("9000000003", "retailer", "Rakesh Verma"),
+    ("9000000004", "retailer", "Mohan Agrawal"),
+    ("9000000005", "retailer", "Sunita Tiwari"),
     ("9000000100", "desk", "Anita (Order desk)"),
 ]
 
@@ -64,6 +66,8 @@ RETAILERS = [
     ("9000000001", "Sharma General Store", "Ramesh", 200000 * RUPEE, 35000 * RUPEE, 0),
     ("9000000002", "Gupta Kirana", "Suresh", 50000 * RUPEE, 42000 * RUPEE, 100),  # tight credit: demos holds
     ("9000000003", "Verma Super Mart", "Ramesh", 300000 * RUPEE, 0, 150),
+    ("9000000004", "Agrawal Provision", "Suresh", 80000 * RUPEE, 10000 * RUPEE, 100),  # last order 22 days ago: inactive list
+    ("9000000005", "Tiwari Stores", "Ramesh", 60000 * RUPEE, 0, 100),  # never ordered: inactive list
 ]
 
 
@@ -117,6 +121,7 @@ def seed(db: Session) -> bool:
         (sharma, "exported", 5, [("SKU-BS-075", 6), ("SKU-SP-100", 8)]),
         (retailers["9000000002"], "confirmed", 1, [("SKU-DT-500", 10), ("SKU-DW-500", 2)]),
         (retailers["9000000003"], "placed", 0, [("SKU-BS-200", 5), ("SKU-TE-100", 3)]),
+        (retailers["9000000004"], "exported", 22, [("SKU-BS-075", 4), ("SKU-DT-500", 3)]),
     ]
     for ret, status, days_ago, items in history:
         priced = price_cart([CartLine(c, q) for c, q in items], *load_pricing(db, ret))

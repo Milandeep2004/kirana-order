@@ -322,16 +322,50 @@ async function exportTally(setMsg) {
   } catch { setMsg("err", "You are offline."); }
 }
 
+function deskTabs() {
+  const cur = state.deskTab || "orders";
+  return h("div", { class: "tabs", role: "tablist" }, [["orders", "Orders"], ["van", "Van list"], ["inactive", "Not ordering"]].map(([v, label]) =>
+    h("button", { class: "tab", type: "button", role: "tab", "aria-selected": String(cur === v), onclick: () => { state.deskTab = v; viewDeskQueue(); } }, label)));
+}
+
+async function viewVanList() {
+  render(deskTabs(), skeleton());
+  let d;
+  try { d = await api("/api/desk/van-list"); }
+  catch (e) { if (e.message === "auth") return; return render(deskTabs(), errorBox(e.offline ? "You are offline." : e.message, viewVanList)); }
+  render(deskTabs(), h("div", { class: "dhead" }, h("h2", { class: "title", style: "margin:0", text: "Van loading list" }),
+      d.rows.length > 0 && h("button", { class: "btn sm noprint", type: "button", onclick: () => window.print() }, "Print")),
+    h("p", { class: "meta", text: `Confirmed orders not yet exported: ${d.order_count}. Free cases are included, because they go on the van too.` }),
+    d.rows.length === 0 ? h("div", { class: "empty" }, h("h2", { text: "Nothing to load" }), h("p", { text: "Confirm an order and it appears here." })) :
+    h("div", { class: "qlist" }, d.rows.map((r) => h("div", { class: "vrow" },
+      h("div", {}, h("strong", { text: r.name }), h("div", { class: "meta", text: r.shops.map((s) => `${s.shop_name} ${s.cases}`).join(" · ") })),
+      h("div", { class: "vtotal" }, h("strong", { text: String(r.total_cases) }), h("span", { text: r.free_cases ? ` cases (${r.free_cases} free)` : " cases" }))))));
+}
+
+async function viewInactive() {
+  render(deskTabs(), skeleton());
+  let d;
+  try { d = await api("/api/desk/inactive?days=14"); }
+  catch (e) { if (e.message === "auth") return; return render(deskTabs(), errorBox(e.offline ? "You are offline." : e.message, viewInactive)); }
+  render(deskTabs(), h("h2", { class: "title", text: "No order in 14 days" }),
+    d.shops.length === 0 ? h("div", { class: "empty" }, h("h2", { text: "Everyone is ordering" }), h("p", { text: "No shop has been quiet for 14 days." })) :
+    h("div", { class: "qlist" }, d.shops.map((s) => h("div", { class: "vrow" },
+      h("div", {}, h("strong", { text: s.shop_name }), h("div", { class: "meta", text: `Salesman: ${s.salesman_name || "-"}` })),
+      h("div", { class: "vtotal" }, h("strong", { text: s.days_since === null ? "Never" : `${s.days_since} days` }), h("span", { text: s.days_since === null ? " ordered" : " ago" }))))));
+}
+
 async function viewDeskQueue() {
+  if (state.deskTab === "van") return viewVanList();
+  if (state.deskTab === "inactive") return viewInactive();
   const filter = state.deskFilter || "";
   render(skeleton());
   let list;
   try { list = await api("/api/desk/orders" + (filter ? `?status=${filter}` : "")); }
-  catch (e) { if (e.message === "auth") return; return render(errorBox(e.offline ? "You are offline." : e.message, viewDeskQueue)); }
+  catch (e) { if (e.message === "auth") return; return render(deskTabs(), errorBox(e.offline ? "You are offline." : e.message, viewDeskQueue)); }
   const box = h("div");
   const setMsg = (kind, text) => { box.replaceChildren(h("p", { class: `msg ${kind}`, role: "status", text })); if (kind === "info") setTimeout(viewDeskQueue, 800); };
   const chips = [["", "All"], ["on_hold", "On hold"], ["placed", "Placed"], ["confirmed", "Confirmed"], ["exported", "Exported"]];
-  render(h("div", { class: "dhead" }, h("h2", { class: "title", style: "margin:0", text: "Order desk" }),
+  render(deskTabs(), h("div", { class: "dhead" }, h("h2", { class: "title", style: "margin:0", text: "Order desk" }),
       h("button", { class: "btn sm", type: "button", onclick: () => exportTally(setMsg) }, "Export confirmed to Tally")), box,
     h("div", { class: "chips", role: "group" }, chips.map(([v, label]) => h("button", { class: "chip", type: "button", "aria-pressed": String(filter === v), onclick: () => { state.deskFilter = v; viewDeskQueue(); } }, label))),
     list.length === 0 ? h("div", { class: "empty" }, h("h2", { text: "No orders here" }), h("p", { text: "Nothing matches this filter." })) :

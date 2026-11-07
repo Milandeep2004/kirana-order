@@ -7,6 +7,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -403,6 +404,48 @@ def desk_queue(status: str | None = None, _: User = Depends(desk_only), db: Sess
     return [{"id": o.id, "status": o.status, "source": o.source, "shop_name": o.retailer.shop_name,
              "total_paise": o.total_paise, "credit_hold_reason": o.credit_hold_reason,
              "created_at": o.created_at.isoformat(), "line_count": len(o.lines)} for o in rows]
+
+
+@app.get("/api/desk/van-list")
+def desk_van_list(_: User = Depends(desk_only), db: Session = Depends(get_db)):
+    """What to load on the van: confirmed (not yet exported) orders summed per SKU, free cases included."""
+    orders = db.scalars(select(Order).where(Order.status == "confirmed")).all()
+    by_sku: dict[str, dict] = {}
+    for o in orders:
+        for l in o.lines:
+            row = by_sku.setdefault(l.sku_code, {"sku_code": l.sku_code, "name": "", "cases": 0, "free_cases": 0, "shops": {}})
+            row["cases"] += l.cases
+            row["free_cases"] += l.free_cases
+            row["shops"][o.retailer.shop_name] = row["shops"].get(o.retailer.shop_name, 0) + l.cases + l.free_cases
+    names = {s.code: s.name for s in db.scalars(select(Sku))}
+    rows = []
+    for r in sorted(by_sku.values(), key=lambda r: r["sku_code"]):
+        r["name"] = names.get(r["sku_code"], r["sku_code"])
+        r["total_cases"] = r["cases"] + r["free_cases"]
+        r["shops"] = [{"shop_name": k, "cases": v} for k, v in sorted(r["shops"].items())]
+        rows.append(r)
+    return {"order_count": len(orders), "rows": rows}
+
+
+@app.get("/api/desk/inactive")
+def desk_inactive(days: int = 14, _: User = Depends(desk_only), db: Session = Depends(get_db)):
+    """Shops with no real order (not draft, not cancelled) in the last `days` days, or never."""
+    days = max(1, min(days, 365))
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    last = dict(db.execute(
+        select(Order.retailer_id, func.max(Order.created_at))
+        .where(Order.status.not_in(("draft_ai", "cancelled"))).group_by(Order.retailer_id)).all())
+    out = []
+    for r in db.scalars(select(Retailer)):
+        when = last.get(r.id)
+        if when is not None and when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        if when is None or when < cutoff:
+            out.append({"shop_name": r.shop_name, "salesman_name": r.salesman_name,
+                        "last_order_at": when.isoformat() if when else None,
+                        "days_since": (datetime.now(timezone.utc) - when).days if when else None})
+    out.sort(key=lambda x: (x["days_since"] is not None, -(x["days_since"] or 0)))
+    return {"days": days, "shops": out}
 
 
 @app.get("/api/desk/skus")
