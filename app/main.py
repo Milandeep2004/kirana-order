@@ -7,7 +7,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import auth
@@ -274,13 +274,24 @@ def _draft_json(o: Order, db: Session):
     } for l in o.lines]}
 
 
+def _order_history(db: Session, retailer_id: int) -> dict[str, int]:
+    """SKU code -> number of this shop's real orders (not drafts or cancelled) that contain it."""
+    rows = db.execute(
+        select(OrderLine.sku_code, func.count(func.distinct(OrderLine.order_id)))
+        .join(Order, Order.id == OrderLine.order_id)
+        .where(Order.retailer_id == retailer_id, Order.status.in_(("placed", "on_hold", "confirmed", "exported")),
+               OrderLine.sku_code.is_not(None))
+        .group_by(OrderLine.sku_code)).all()
+    return {code: n for code, n in rows}
+
+
 @app.post("/api/capture", status_code=201)
 def capture_order(body: CaptureRequest, retailer: Retailer = Depends(auth.current_retailer),
                   db: Session = Depends(get_db)):
     catalog = [cap.CatalogItem(s.code, s.name, s.category, s.keywords, s.stock_cases)
                for s in db.scalars(select(Sku))]
     aliases = {a.phrase: a.sku_code for a in db.scalars(select(Alias).where(Alias.retailer_id == retailer.id))}
-    lines = cap.capture(body.text, catalog, aliases, _llm)
+    lines = cap.capture(body.text, catalog, aliases, _llm, _order_history(db, retailer.id))
     # Nothing understood at all (no item matched and no quantity found) is not an order: say so.
     if not any(c.sku_code or c.qty for c in lines):
         raise HTTPException(422, "We could not find any items in that message. Try e.g. '5 case biscuit'.")

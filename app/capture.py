@@ -195,6 +195,17 @@ def _confidence(top: float, runner_up: float) -> tuple[str, str]:
     return "medium", ""
 
 
+_RANK = {"low": 0, "medium": 1, "high": 2}
+HISTORY_BONUS_PER_ORDER = 0.04
+HISTORY_BONUS_MAX = 0.12
+
+
+def _history_bonus(c: Candidate, history: dict[str, int]) -> float:
+    """Small nudge for items this shop has ordered before; ignored when the text barely matches."""
+    n = history.get(c.code, 0)
+    return min(HISTORY_BONUS_MAX, HISTORY_BONUS_PER_ORDER * n) if n and c.score >= 0.3 else 0.0
+
+
 LLMPicker = Callable[[str, list[Candidate]], str | None]
 
 
@@ -232,7 +243,14 @@ def capture(
     catalog: list[CatalogItem],
     aliases: dict[str, str] | None = None,
     llm: LLMPicker | None = None,
+    history: dict[str, int] | None = None,
 ) -> list[CapturedLine]:
+    """history: SKU code -> number of this shop's earlier orders containing it.
+
+    It only nudges ranking (see HISTORY_BONUS) so a shop's usual item wins a tie. It can never
+    make a line "high" confidence on its own: a person still checks it.
+    """
+    history = history or {}
     aliases = {clean_phrase(k): v for k, v in (aliases or {}).items()}
     by_code = {c.code: c for c in catalog}
     results: list[CapturedLine] = []
@@ -241,10 +259,15 @@ def capture(
         if not _item_words(desc) and not QTY_UNIT_RE.search(_canon_units(normalize(seg))):
             continue  # greeting / filler, nothing orderable
         qty, unit, unit_q, qnote = extract_quantity(seg)
-        ranked = sorted(
+        base = sorted(
             (Candidate(c.code, c.name, round(score_item(desc, c), 3), c.stock_cases) for c in catalog),
             key=lambda c: c.score, reverse=True,
         )
+        ranked = sorted(
+            (Candidate(c.code, c.name, round(c.score + _history_bonus(c, history), 3), c.stock_cases) for c in base),
+            key=lambda c: c.score, reverse=True,
+        )
+        base_top = base[0].code
         source = "fuzzy"
         # 1) retailer's own alias wins
         alias_code = None
@@ -260,6 +283,13 @@ def capture(
             conf, cnote, source = "high", "Matched from this shop's earlier orders.", "alias"
         else:
             conf, cnote = _confidence(ranked[0].score, ranked[1].score if len(ranked) > 1 else 0.0)
+            base_conf, _ = _confidence(base[0].score, base[1].score if len(base) > 1 else 0.0)
+            used = history.get(ranked[0].code, 0)
+            if used and (ranked[0].code != base_top or _RANK[conf] > _RANK[base_conf]):
+                # history decided this line: suggest it, but never present it as certain
+                if conf == "high":
+                    conf = "medium"
+                cnote = f"You have ordered this {used} time{'s' if used != 1 else ''} before. Please check."
             if conf != "high" and llm and ranked[0].score >= 0.3:
                 picked = llm(desc, ranked[:3])
                 if picked:
@@ -276,7 +306,7 @@ def capture(
         note = " ".join(n for n in (cnote, qnote) if n)
         results.append(CapturedLine(
             original_text=seg.strip(), description=desc, qty=qty, unit=unit, unit_question=unit_q,
-            sku_code=sku, confidence=conf, score=ranked[0].score if sku else 0.0, source=source,
+            sku_code=sku, confidence=conf, score=min(1.0, ranked[0].score) if sku else 0.0, source=source,
             alternatives=alts, note=note,
         ))
     return results

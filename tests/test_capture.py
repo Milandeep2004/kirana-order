@@ -122,3 +122,27 @@ def test_llm_garbage_or_failure_falls_back_to_rules():
     invented = make_anthropic_picker("k", "m", post=lambda *a, **kw: R())
     l = capture("3 peti biscuit", CATALOG, llm=invented)[0]
     assert l.source == "fuzzy"  # invented SKU ignored
+
+
+# ---- past-order history (the brief: "maps items to SKUs using the retailer's past orders") ----
+def test_history_breaks_a_tie_but_is_only_medium_and_says_why():
+    plain = capture("3 peti biscuit", CATALOG)[0]
+    assert plain.confidence == "low"
+    l = capture("3 peti biscuit", CATALOG, history={"SKU-BS-200": 3})[0]
+    assert l.sku_code == "SKU-BS-200" and l.confidence == "medium"
+    assert "ordered this 3 times" in l.note
+    assert "SKU-BS-075" in [a.code for a in l.alternatives]
+
+
+def test_history_never_makes_a_line_high_or_overrides_clear_text():
+    l = capture("2 peti washing powder 1 kilo", CATALOG, history={"SKU-DT-500": 9})[0]
+    assert l.sku_code == "SKU-DT-1KG" and l.confidence == "high"
+
+
+def test_history_does_not_rescue_unrelated_text():
+    l = capture("2 peti zebra paint", CATALOG, history={"SKU-BS-200": 9, "SKU-TE-250": 9})[0]
+    assert l.sku_code is None and l.confidence == "low"
+
+
+def test_single_past_order_is_not_enough_to_decide():
+    assert capture("3 peti biscuit", CATALOG, history={"SKU-BS-200": 1})[0].confidence == "low"

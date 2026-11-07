@@ -78,3 +78,24 @@ def test_gibberish_message_rejected(client):
     login(client, SHARMA)
     assert client.post("/api/capture", json={"text": "hello bhaiya kaise ho"}).status_code == 422
     assert client.post("/api/capture", json={"text": "ab"}).status_code == 422
+
+
+def test_capture_uses_this_shops_confirmed_orders_not_other_shops(client):
+    from app.db import SessionLocal
+    from app.main import _order_history
+    from app.models import Retailer
+    login(client, SHARMA)
+    me = client.get("/api/me").json()
+    with SessionLocal() as db:
+        mine = _order_history(db, db.query(Retailer).filter_by(shop_name=me["shop"]).one().id)
+        other = _order_history(db, db.query(Retailer).filter(Retailer.shop_name != me["shop"]).first().id)
+    assert mine and all(n >= 1 for n in mine.values())
+    assert mine != other  # each shop has its own history
+
+
+def test_seeded_history_turns_an_ambiguous_line_into_a_suggestion(client):
+    login(client, SHARMA)
+    l = client.post("/api/capture", json={"text": "3 peti biscuit"}).json()["lines"][0]
+    assert l["sku_code"] and l["confidence"] in ("medium", "low")
+    if l["confidence"] == "medium":
+        assert "ordered this" in l["note"]
