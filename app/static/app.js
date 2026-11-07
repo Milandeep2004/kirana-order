@@ -113,11 +113,31 @@ async function viewLogin() {
 }
 
 // ---------- catalogue ----------
-function packIcon(category) {
-  const s = svg("svg", { viewBox: "0 0 64 80", "aria-hidden": "true" });
-  const body = category === "Tea" ? "M14 22h36l-4 50H18z" : category === "Biscuits" ? "M8 26h48v38H8z" : "M16 14h32v58H16z";
-  s.append(svg("path", { d: body, fill: "#fff", "fill-opacity": ".85", stroke: "#1c1c1a", "stroke-opacity": ".25", "stroke-width": "2" }));
-  s.append(svg("rect", { x: "20", y: "36", width: "24", height: "14", rx: "3", fill: "#1f6f4a", "fill-opacity": ".85" }));
+// Small original pack drawings (about 1 KB of markup each): one shape per product type, size label from the name.
+function packIcon(item) {
+  const code = item.code || "", name = item.name || "";
+  const w = (name.match(/(\d+(?:\.\d+)?)\s?(kg|g|ml)\b/i) || []).slice(1, 3).join("");
+  const S = { fill: "#fff", "fill-opacity": ".92", stroke: "#1c1c1a", "stroke-opacity": ".28", "stroke-width": "2", "stroke-linejoin": "round" };
+  const G = { fill: "#1f6f4a", "fill-opacity": ".9" };
+  const s = svg("svg", { viewBox: "0 0 80 80", "aria-hidden": "true" });
+  const add = (tag, attrs) => s.append(svg(tag, attrs));
+  if (code.startsWith("SKU-BS")) {            // biscuit pillow pack with crimped ends
+    add("path", { d: "M14 18h52l-3 6 3 6-3 6 3 6-3 6 3 6H14l3-6-3-6 3-6-3-6 3-6z", ...S });
+    add("circle", { cx: "40", cy: "40", r: "13", fill: "#e8c27a", stroke: "#1c1c1a", "stroke-opacity": ".25", "stroke-width": "2" });
+    [[35, 36], [44, 38], [38, 45]].forEach(([x, y]) => add("circle", { cx: x, cy: y, r: "1.6", fill: "#1c1c1a", "fill-opacity": ".35" }));
+  } else if (code.startsWith("SKU-TE")) {     // tea carton with a leaf
+    add("path", { d: "M18 16h44v52H18z", ...S }); add("path", { d: "M18 16l8-6h36l-0 6", ...S });
+    add("path", { d: "M40 54c-12-2-16-12-14-20 10 0 18 6 14 20z", ...G }); add("path", { d: "M40 54c0-8 2-12 6-16", stroke: "#fff", "stroke-width": "2", fill: "none" });
+  } else if (code.startsWith("SKU-DT")) {     // detergent bag with bubbles
+    add("path", { d: "M16 20c8-4 40-4 48 0l-2 48c-14 4-30 4-44 0z", ...S });
+    add("circle", { cx: "34", cy: "40", r: "7", ...G }); add("circle", { cx: "47", cy: "34", r: "4.5", ...G }); add("circle", { cx: "48", cy: "49", r: "5.5", ...G });
+  } else if (code.startsWith("SKU-DW")) {     // dishwash bottle
+    add("path", { d: "M34 8h12v8l8 8v44H26V24l8-8z", ...S }); add("rect", { x: "34", y: "4", width: "12", height: "6", rx: "2", ...G });
+    add("path", { d: "M40 34c6 8 7 12 0 16-7-4-6-8 0-16z", ...G });
+  } else {                                     // soap carton
+    add("rect", { x: "12", y: "26", width: "56", height: "34", rx: "8", ...S }); add("rect", { x: "22", y: "36", width: "36", height: "14", rx: "6", ...G });
+  }
+  if (w) { const t2 = svg("text", { x: "40", y: "77", "text-anchor": "middle", "font-size": "11", "font-weight": "700", fill: "#1c1c1a", "fill-opacity": ".55", "font-family": "system-ui,sans-serif" }); t2.textContent = w; s.append(t2); }
   return s;
 }
 const stockLabel = (s) => (s === "out" ? t("outStock") : s === "low" ? t("lowStock") : t("inStock"));
@@ -148,7 +168,7 @@ async function viewCatalogue() {
       h("p", { class: "gst", text: t("exclGst") }),
       h("div", { class: "grid" }, items.filter((i) => state.filter === "all" || i.category === state.filter).map((i) =>
         h("article", { class: "card" },
-          h("div", { class: "pic", style: `background:${i.color}` }, packIcon(i.category), i.schemes[0] && h("span", { class: "badge", text: t("offer") })),
+          h("div", { class: "pic", style: `background:${i.color}` }, packIcon(i), i.schemes[0] && h("span", { class: "badge", text: t("offer") })),
           h("div", { class: "body" }, h("h3", { text: itemName(i.code) }),
             h("div", { class: "price" }, rupees(i.case_price_paise), " ", h("small", { text: t("perCase") })),
             h("div", { class: "sub2", text: `${rupees(i.piece_price_paise)} ${t("perPiece")} · ${t("exGst")}` }),

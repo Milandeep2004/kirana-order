@@ -48,7 +48,7 @@ header.top .wrap{display:flex;align-items:center;gap:12px;padding:10px 16px;min-
 @media(min-width:560px){.grid{grid-template-columns:1fr 1fr}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column}
 .pic{aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;position:relative}
-.pic svg{width:46%;height:auto;max-height:88%}
+.pic svg{height:92%;width:auto;max-width:70%}
 .badge{position:absolute;left:10px;top:10px;background:#fff;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;color:var(--brand)}
 .card .body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px;flex:1}
 .card h3{margin:0;font-size:16px;line-height:1.3}
