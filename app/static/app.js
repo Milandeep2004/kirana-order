@@ -189,14 +189,24 @@ async function viewCatalogue() {
 }
 
 // ---------- cart ----------
-async function viewCart() {
+let cartSeq = 0, cartTimer = 0;
+// Quantity taps change the number at once; the server (the only pricing engine) is asked once the taps pause,
+// and the page is updated in place without a loading flash. Older answers are dropped.
+function repriceSoon() {
+  document.querySelector("main")?.classList.add("stale");
+  clearTimeout(cartTimer);
+  cartTimer = setTimeout(() => viewCart(true), 350);
+}
+async function viewCart(quiet = false) {
+  const mySeq = ++cartSeq;
   const codes = Object.keys(state.cart);
   if (!codes.length) return render(h("div", { class: "empty" }, h("h2", { text: t("emptyCart") }), h("button", { class: "btn sm", type: "button", onclick: () => go("#/catalogue") }, t("browse"))));
-  render(skeleton());
+  if (!quiet) render(skeleton());
   await ensureCat();
   let priced;
   try { priced = await api("/api/cart/price", { method: "POST", body: { lines: codes.map((c) => ({ sku_code: c, cases: state.cart[c] })) } }); }
-  catch (e) { if (e.message === "auth") return; return render(errorBox(e.offline ? t("offlineCart") : e.message, viewCart)); }
+  catch (e) { if (e.message === "auth" || mySeq !== cartSeq || location.hash !== "#/cart") return; return render(errorBox(e.offline ? t("offlineCart") : e.message, viewCart)); }
+  if (mySeq !== cartSeq || location.hash !== "#/cart") return;  // a newer tap or another page took over
   const me = state.me, credit = me.credit_limit_paise - me.outstanding_paise;
   const over = priced.total_paise > credit;
   const saved = priced.lines.reduce((a, l) => a + l.discount_paise, 0);
@@ -213,7 +223,7 @@ async function viewCart() {
   render(
     priced.lines.map((l) => h("div", { class: "line" },
       h("div", { class: "row" }, h("span", { class: "name", text: itemName(l.sku_code, l.name) }), h("button", { class: "link", type: "button", onclick: () => { setQty(l.sku_code, 0); refresh(); } }, t("remove"))),
-      h("div", { class: "row" }, stepper(l.sku_code, refresh), h("strong", { text: rupees(l.net_paise) })),
+      h("div", { class: "row" }, stepper(l.sku_code, repriceSoon), h("strong", { text: rupees(l.net_paise) })),
       l.free_cases > 0 && h("div", { class: "note", text: `+ ${l.free_cases} ${t("cases")} ${t("free")}` }),
       (itemOf(l.sku_code)?.scheme_rules || []).filter((r) => r.type === "slab" && l.cases >= r.min_cases).map((r) => h("div", { class: "note", text: ruleText(r) })),
       l.issues.map((i) => h("div", { class: "msg err", role: "alert" }, i.message, " ",

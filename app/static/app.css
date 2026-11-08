@@ -138,3 +138,5 @@ header.top.wide .wrap{max-width:980px}
 .vrow{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fff}
 .vtotal{text-align:right;white-space:nowrap}.vtotal strong{font-size:20px}
 @media print{.tabs,.dtabs,.noprint,header,nav,.chips{display:none!important}.vrow{break-inside:avoid}}
+main.stale .totals,main.stale .line strong{opacity:.45;transition:opacity .15s}
+main.stale .btn:not(.sm){pointer-events:none;opacity:.5}
