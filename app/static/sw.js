@@ -1,5 +1,5 @@
 // Level-1 offline: the app shell opens without signal, and the last catalogue is shown as an estimate.
-const SHELL = "kirana-shell-v7";
+const SHELL = "kirana-shell-v8";
 const API = "kirana-api-v2";
 const FILES = ["/", "/static/app.css", "/static/app.js", "/static/i18n.js", "/static/icon.svg", "/static/manifest.webmanifest"];
 
@@ -23,6 +23,10 @@ self.addEventListener("fetch", (e) => {
       if (r.ok) { const copy = r.clone(); caches.open(API).then((c) => c.put(req, copy)); }
       return r;
     }).catch(() => caches.match(req).then((m) => m || Response.error())));
+    return;
+  }
+  if (url.pathname.startsWith("/static/img/")) { // product pictures never change: cache first
+    e.respondWith(caches.match(req).then((m) => m || fetch(req).then((r) => { if (r.ok) { const c = r.clone(); caches.open(SHELL).then((x) => x.put(req, c)); } return r; })));
     return;
   }
   if (url.pathname.startsWith("/api/")) return; // everything else is always live

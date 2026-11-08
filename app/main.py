@@ -7,6 +7,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+import json
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -31,6 +32,10 @@ app = FastAPI(title="Kirana Order", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=500)  # small payloads matter on 3G
 
 STATIC = Path(__file__).parent / "static"
+try:  # product pictures: AI-generated stand-ins, one small WebP per SKU plus its background colour
+    IMG_BG = json.loads((STATIC / "img" / "colors.json").read_text())
+except (OSError, ValueError):
+    IMG_BG = {}
 CSP = ("default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
        "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 
@@ -141,6 +146,7 @@ def catalogue(retailer: Retailer = Depends(auth.current_retailer), db: Session =
         stock = "out" if s.stock_cases <= 0 else "low" if s.stock_cases < 50 else "in"
         items.append({
             "code": s.code, "name": s.name, "name_hi": s.name_hi, "category": s.category, "color": s.color,
+            "image": f"/static/img/{s.code}.webp" if s.code in IMG_BG else None, "image_bg": IMG_BG.get(s.code),
             "pieces_per_case": s.pieces_per_case,
             "piece_price_paise": adjust_price(s.piece_price_paise, retailer.price_discount_bp),
             "case_price_paise": case_price, "stock_status": stock,

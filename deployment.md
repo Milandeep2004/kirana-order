@@ -75,3 +75,4 @@ it and export the Tally CSV. Then open the "Van list" tab to see the confirmed c
   or redeploys. This is acceptable for a demo and would be a managed Postgres in production.
 - Demo mode publishes the login code on purpose. Never enable it with real data.
 - OTP, SMS and WhatsApp are mocked.
+- Product pictures (`app/static/img`) are AI-generated, unbranded stand-ins, about 12 KB each. They are not real product photos.

@@ -78,3 +78,14 @@ def test_catalogue_has_hindi_names_and_structured_scheme_rules(client):
     rule = items["SKU-BS-075"]["scheme_rules"][0]
     assert rule == {"type": "free_goods", "buy_qty": 10, "free_qty": 1, "min_cases": 0, "discount_pct": 0.0}
     assert items["SKU-DT-1KG"]["scheme_rules"][0]["discount_pct"] == 3.0
+
+
+def test_catalogue_has_a_picture_for_every_product_and_the_file_exists(client):
+    from pathlib import Path
+    login(client, SHARMA)
+    items = client.get("/api/catalogue").json()["items"]
+    assert items
+    for i in items:
+        assert i["image"] == f"/static/img/{i['code']}.webp" and i["image_bg"].startswith("#")
+        assert client.get(i["image"]).status_code == 200
+        assert (Path(__file__).parent.parent / "app" / "static" / "img" / f"{i['code']}.webp").stat().st_size < 30_000

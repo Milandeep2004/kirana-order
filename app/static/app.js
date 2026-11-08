@@ -114,6 +114,13 @@ async function viewLogin() {
 
 // ---------- catalogue ----------
 // Small original pack drawings (about 1 KB of markup each): one shape per product type, size label from the name.
+// The picture sits over the drawing; if it is slow or missing, the drawing (and tile colour) is what shows.
+function photo(item, idx) {
+  if (!item.image) return null;
+  const img = h("img", { src: item.image, alt: itemName(item.code, item.name), width: 480, height: 480, decoding: "async", loading: idx < 2 ? "eager" : "lazy" });
+  img.onerror = () => img.remove();
+  return img;
+}
 function packIcon(item) {
   const code = item.code || "", name = item.name || "";
   const w = (name.match(/(\d+(?:\.\d+)?)\s?(kg|g|ml)\b/i) || []).slice(1, 3).join("");
@@ -166,9 +173,9 @@ async function viewCatalogue() {
       h("div", { class: "chips", role: "group" }, cats.map((c) => h("button", { class: "chip", type: "button", "aria-pressed": String(state.filter === c),
         onclick: () => { state.filter = c; draw(); } }, c === "all" ? t("all") : catLabel(c)))),
       h("p", { class: "gst", text: t("exclGst") }),
-      h("div", { class: "grid" }, items.filter((i) => state.filter === "all" || i.category === state.filter).map((i) =>
+      h("div", { class: "grid" }, items.filter((i) => state.filter === "all" || i.category === state.filter).map((i, idx) =>
         h("article", { class: "card" },
-          h("div", { class: "pic", style: `background:${i.color}` }, packIcon(i), i.schemes[0] && h("span", { class: "badge", text: t("offer") })),
+          h("div", { class: "pic", style: `background:${i.image_bg || i.color}` }, packIcon(i), photo(i, idx), i.schemes[0] && h("span", { class: "badge", text: t("offer") })),
           h("div", { class: "body" }, h("h3", { text: itemName(i.code) }),
             h("div", { class: "price" }, rupees(i.case_price_paise), " ", h("small", { text: t("perCase") })),
             h("div", { class: "sub2", text: `${rupees(i.piece_price_paise)} ${t("perPiece")} · ${t("exGst")}` }),

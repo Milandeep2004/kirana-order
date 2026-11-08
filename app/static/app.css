@@ -140,3 +140,5 @@ header.top.wide .wrap{max-width:980px}
 @media print{.tabs,.dtabs,.noprint,header,nav,.chips{display:none!important}.vrow{break-inside:avoid}}
 main.stale .totals,main.stale .line strong{opacity:.45;transition:opacity .15s}
 main.stale .btn:not(.sm){pointer-events:none;opacity:.5}
+.pic img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.pic .badge{z-index:1}
