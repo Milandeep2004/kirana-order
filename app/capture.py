@@ -22,7 +22,7 @@ PIECE_UNITS = {"pcs", "pc", "piece", "pieces", "pkt", "pkts", "packet", "packets
 SIZE_UNITS = {"kg", "kgs", "kilo", "kilos", "kilogram", "g", "gm", "gms", "gram", "grams", "ml", "l", "ltr", "litre", "liter"}
 HINDI_NUMBERS = {
     "ek": 1, "do": 2, "teen": 3, "char": 4, "chaar": 4, "paanch": 5, "panch": 5, "chhe": 6, "che": 6,
-    "saat": 7, "aath": 8, "nau": 9, "das": 10, "gyarah": 11, "barah": 12, "pandrah": 15, "bees": 20,
+    "saat": 7, "aath": 8, "nau": 9, "das": 10, "dus": 10, "bis": 20, "pachees": 25, "tees": 30, "pachas": 50, "gyarah": 11, "barah": 12, "pandrah": 15, "bees": 20,
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
 }
 STOPWORDS = {
@@ -145,6 +145,15 @@ def extract_quantity(segment: str) -> tuple[int | None, str | None, bool, str]:
     return None, None, True, "No quantity found. Please enter cases."
 
 
+def _bare_sizes(segment: str, known: set[float]) -> set[float]:
+    """A number written without a unit ('detergent 500', 'tea 100') counts as a pack size when it equals
+    a size we actually sell. The quantity ('3 peti') and unit-ed sizes ('1 kilo') are removed first."""
+    t = _canon_units(normalize(segment))
+    t = QTY_UNIT_RE.sub(" ", t)
+    t = SIZE_RE.sub(" ", t)
+    return {float(n) for n in BARE_NUM_RE.findall(t) if float(n) in known}
+
+
 def _item_words(text: str) -> list[str]:
     """Words that describe the item (no numbers, no unit/filler words)."""
     out = []
@@ -168,7 +177,7 @@ def _sku_sizes(item: CatalogItem) -> set[float]:
     return sizes_in(item.name) | {float(n) for n in re.findall(r"\b(\d+)\b", item.keywords.replace(",", " ")) if float(n) >= 50}
 
 
-def score_item(desc: str, item: CatalogItem) -> float:
+def score_item(desc: str, item: CatalogItem, want: set[float] | None = None) -> float:
     words = _item_words(desc)
     if not words:
         return 0.0
@@ -178,10 +187,11 @@ def score_item(desc: str, item: CatalogItem) -> float:
     hits = sum(1 for w in words if any(fuzz.ratio(w, sw) >= 85 for sw in sku_words))
     kw = hits / len(words)
     score = 0.8 * s + 0.2 * kw
-    want = sizes_in(desc)
+    want = sizes_in(desc) if want is None else want
     if want:
         score += 0.15 if want & _sku_sizes(item) else -0.25
-    return max(0.0, min(1.0, score))
+    # not clipped at 1.0: a size match must be able to separate two items that both match the words perfectly
+    return max(0.0, score)
 
 
 def _confidence(top: float, runner_up: float) -> tuple[str, str]:
@@ -253,14 +263,16 @@ def capture(
     history = history or {}
     aliases = {clean_phrase(k): v for k, v in (aliases or {}).items()}
     by_code = {c.code: c for c in catalog}
+    known_sizes = set().union(*(_sku_sizes(c) for c in catalog)) if catalog else set()
     results: list[CapturedLine] = []
     for seg in split_message(message):
         desc = strip_quantity(seg)
         if not _item_words(desc) and not QTY_UNIT_RE.search(_canon_units(normalize(seg))):
             continue  # greeting / filler, nothing orderable
         qty, unit, unit_q, qnote = extract_quantity(seg)
+        want = sizes_in(seg) | _bare_sizes(seg, known_sizes)
         base = sorted(
-            (Candidate(c.code, c.name, round(score_item(desc, c), 3), c.stock_cases) for c in catalog),
+            (Candidate(c.code, c.name, round(score_item(desc, c, want), 3), c.stock_cases) for c in catalog),
             key=lambda c: c.score, reverse=True,
         )
         ranked = sorted(

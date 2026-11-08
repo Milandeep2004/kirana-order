@@ -1,0 +1,372 @@
+[
+ {
+  "text": "bhaiya 5 peti biscuit chhota, 2 peti washing powder 1 kilo, chai patti 250 wala 1 peti",
+  "lines": [
+   {
+    "sku": "SKU-BS-075",
+    "qty": 5,
+    "unit": "case"
+   },
+   {
+    "sku": "SKU-DT-1KG",
+    "qty": 2,
+    "unit": "case"
+   },
+   {
+    "sku": "SKU-TE-250",
+    "qty": 1,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "2 peti biscuit bada, 3 peti detergent 500",
+  "lines": [
+   {
+    "sku": "SKU-BS-200",
+    "qty": 2,
+    "unit": "case"
+   },
+   {
+    "sku": "SKU-DT-500",
+    "qty": 3,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "bhaiya dishwash 2 peti aur sabun 5 peti",
+  "lines": [
+   {
+    "sku": "SKU-DW-500",
+    "qty": 2,
+    "unit": "case"
+   },
+   {
+    "sku": "SKU-SP-100",
+    "qty": 5,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "chai patti 100 wala 4 peti",
+  "lines": [
+   {
+    "sku": "SKU-TE-100",
+    "qty": 4,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "10 case biscuit 75 gram",
+  "lines": [
+   {
+    "sku": "SKU-BS-075",
+    "qty": 10,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "teen peti washing powder 1 kilo",
+  "lines": [
+   {
+    "sku": "SKU-DT-1KG",
+    "qty": 3,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "paanch peti biskut chhota",
+  "lines": [
+   {
+    "sku": "SKU-BS-075",
+    "qty": 5,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "washing powder 500 gram 2 peti, chai patti 250 1 peti",
+  "lines": [
+   {
+    "sku": "SKU-DT-500",
+    "qty": 2,
+    "unit": "case"
+   },
+   {
+    "sku": "SKU-TE-250",
+    "qty": 1,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "20 piece biscuit chhota",
+  "lines": [
+   {
+    "sku": "SKU-BS-075",
+    "qty": 20,
+    "unit": "piece"
+   }
+  ]
+ },
+ {
+  "text": "dus peti biscuit chhota 75",
+  "lines": [
+   {
+    "sku": "SKU-BS-075",
+    "qty": 10,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "kal ke liye 3 peti dishwash liquid",
+  "lines": [
+   {
+    "sku": "SKU-DW-500",
+    "qty": 3,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "soap 10 peti",
+  "lines": [
+   {
+    "sku": "SKU-SP-100",
+    "qty": 10,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "bisket chhota 4 peti, detargent 1 kilo 2 peti",
+  "lines": [
+   {
+    "sku": "SKU-BS-075",
+    "qty": 4,
+    "unit": "case"
+   },
+   {
+    "sku": "SKU-DT-1KG",
+    "qty": 2,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "chaay patti 250 gram 2 peti",
+  "lines": [
+   {
+    "sku": "SKU-TE-250",
+    "qty": 2,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "6 peti bada biscuit aur 1 peti tea 100",
+  "lines": [
+   {
+    "sku": "SKU-BS-200",
+    "qty": 6,
+    "unit": "case"
+   },
+   {
+    "sku": "SKU-TE-100",
+    "qty": 1,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "namaste, 3 peti washing powder 500 aur 2 peti dishwash",
+  "lines": [
+   {
+    "sku": "SKU-DT-500",
+    "qty": 3,
+    "unit": "case"
+   },
+   {
+    "sku": "SKU-DW-500",
+    "qty": 2,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "biscuit 200 g 5 case",
+  "lines": [
+   {
+    "sku": "SKU-BS-200",
+    "qty": 5,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "12 case detergent powder 1kg",
+  "lines": [
+   {
+    "sku": "SKU-DT-1KG",
+    "qty": 12,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "ek peti chai patti 100 wala, do peti biscuit bada",
+  "lines": [
+   {
+    "sku": "SKU-TE-100",
+    "qty": 1,
+    "unit": "case"
+   },
+   {
+    "sku": "SKU-BS-200",
+    "qty": 2,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "50 piece sabun",
+  "lines": [
+   {
+    "sku": "SKU-SP-100",
+    "qty": 50,
+    "unit": "piece"
+   }
+  ]
+ },
+ {
+  "text": "15 peti kapde ka powder 1 kilo",
+  "lines": [
+   {
+    "sku": "SKU-DT-1KG",
+    "qty": 15,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "dishwash 500 ml 4 peti, sabun 100 gram 6 peti, chai 250 3 peti",
+  "lines": [
+   {
+    "sku": "SKU-DW-500",
+    "qty": 4,
+    "unit": "case"
+   },
+   {
+    "sku": "SKU-SP-100",
+    "qty": 6,
+    "unit": "case"
+   },
+   {
+    "sku": "SKU-TE-250",
+    "qty": 3,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "biscuit chhota 5 peti, biscuit bada 2 peti",
+  "lines": [
+   {
+    "sku": "SKU-BS-075",
+    "qty": 5,
+    "unit": "case"
+   },
+   {
+    "sku": "SKU-BS-200",
+    "qty": 2,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "8 peti nahane ka sabun",
+  "lines": [
+   {
+    "sku": "SKU-SP-100",
+    "qty": 8,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "2 peti bartan liquid",
+  "lines": [
+   {
+    "sku": "SKU-DW-500",
+    "qty": 2,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "5 biscuit",
+  "lines": [
+   {
+    "sku": null,
+    "qty": 5,
+    "unit": null
+   }
+  ]
+ },
+ {
+  "text": "1 peti tea",
+  "lines": [
+   {
+    "sku": null,
+    "qty": 1,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "bhaiya 2 peti detergent",
+  "lines": [
+   {
+    "sku": null,
+    "qty": 2,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "shampoo 3 peti",
+  "lines": [
+   {
+    "sku": null,
+    "qty": 3,
+    "unit": "case"
+   }
+  ]
+ },
+ {
+  "text": "washing powder 3",
+  "lines": [
+   {
+    "sku": null,
+    "qty": 3,
+    "unit": null
+   }
+  ]
+ },
+ {
+  "text": "10 chai patti",
+  "lines": [
+   {
+    "sku": null,
+    "qty": 10,
+    "unit": null
+   }
+  ]
+ }
+]
