@@ -22,6 +22,11 @@ sample data on first start. Delete `kirana.db` to reset to the seed data. Do thi
 
 Run the tests: `python -m pytest -q`
 
+Two extra checks (not part of pytest):
+- Accuracy of the AI capture on a labelled message set: `PYTHONPATH=. python scripts/eval_capture.py`
+- Click-through check of every screen (needs `pip install playwright` and `playwright install chromium`, and the app running):
+  `BASE=http://localhost:8000 python scripts/smoke_clicks.py`
+
 ## 2. How it is deployed
 
 A single web service on Render (free plan), described in `render.yaml`:
